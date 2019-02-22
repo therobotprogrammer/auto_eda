@@ -17,6 +17,15 @@ import math
 import mpu
 import string
 import re
+import sys
+from sklearn_pandas import CategoricalImputer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.impute import SimpleImputer
+
+from sklearn import tree, model_selection
+
+
+
 #from sklearn_pandas import CategoricalImputer
 
 
@@ -156,6 +165,77 @@ def hash_it(text):
     return(hash_int)   
                                               
 
+
+
+def cat_preprocess(df_original, strategy = 'seperate_unknown'):    
+    
+    df = df_original.copy(deep = True)
+        
+    sys_min = -sys.maxsize -1   
+   
+    for column_name in df.columns:    
+        series = df[column_name]
+        
+        if strategy == 'seperate_unknown':
+            
+            if series.dtype.kind in 'biufc': 
+                #convert NaN to number
+                series = series.replace(np.NaN, sys_min)
+            else:
+                series = series.replace(np.NaN, 'Unknown')                          
+        else:
+            ci = CategoricalImputer()
+            ci.fit(series)
+            series = ci.transform(series)   
+            
+        # label encode. label encoder does not work directly on multiple columns so its in for loop    
+        le = preprocessing.LabelEncoder()
+        le.fit(series)
+        series = le.transform(series)        
+        df[column_name] = series       
+ 
+    
+#    ohe = preprocessing.OneHotEncoder(categories = 'auto')
+#    ohe.fit(df)
+#    df = ohe.transform(df).toarray()
+#    
+#    df = pd.get_dummies(df)
+        
+    #one hot encoding    
+    df = pd.get_dummies(df, columns= df.columns )
+
+    return df
+
+
+
+
+
+
+
+def cont_preprocess(df_original):
+    
+    df = df_original.copy(deep = True)
+
+    for column_name in df.columns:    
+        series = df[column_name]
+        
+        if series.count() < .1 * target_series.shape[0]:
+            log_column_str = '[' + column_name +']'
+            print('WARNING: ' , log_column_str, ' Continuous column has less than 10% data. Try increasing auto_min_entries_in_continous_column so it can be considered caregorical')
+            
+    
+    features = df.columns
+    
+    imp = SimpleImputer()
+    imp.fit(df[features])
+    df[features] = imp.transform(df[features])    
+
+    return df
+
+
+
+
+
 column_properties_df = pd.DataFrame(columns = ['categorical', 'text', 'unresolved', 'incomplete', 'imputed', 'error'])
 
 train_categorical = pd.DataFrame()
@@ -191,6 +271,7 @@ for idx, column in enumerate(train.columns):
             try:
                 temp_column = pd.to_numeric(train[column])                
             except Exception:
+                temp_column = train[column]
                 pass            
         
                         
@@ -432,79 +513,85 @@ for column in auto_generated_hash_df.columns:
     except Exception:
         pass  
                         
-#
-#auto_generated_hash_df['Sex'] = train['Sex']
-#auto_generated_hash_df['Survived'] = train['Survived']
-#
-#
-#g = sns.FacetGrid(auto_generated_hash_df, row="Name_5", col="Survived") 
-#g.map(sns.countplot, "Sex")
-#
-#g = sns.FacetGrid(auto_generated_hash_df, row="Name_5", col="Sex") 
-#g.map(sns.countplot, "Survived")
-#
-#g = sns.FacetGrid(auto_generated_hash_df, row="Cabin_3", col="Survived") 
-#g.map(sns.countplot, "Sex")
-
-#TO DO: GET TICKET_0 IN HASH
-
-
-
 
 
 combined_categorical_df = pd.DataFrame()
 combined_categorical_df = train_categorical.join(auto_generated_data_df_categorical,how = 'outer')
 combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
-
-from sklearn_pandas import CategoricalImputer
-from sklearn.preprocessing import OneHotEncoder
+combined_categorical_preprocessed_df = cat_preprocess(combined_categorical_df)
 
 
-titanic_train = train
+combined_continuous_df = pd.DataFrame()
+combined_continuous_df = combined_continuous_df.join(train_continuous,how = 'outer')
+combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_continuous,how = 'outer')
 
 
-#ohe_features = ['Sex','Embarked','Pclass']
-#ohe = preprocessing.OneHotEncoder()
-#ohe.fit(titanic_train[ohe_features])
-#print(ohe.n_values_)
-#tmp1 = ohe.transform(titanic_train[ohe_features]).toarray()
-#
-
-#
-#lab_encoder_sex = preprocessing.LabelEncoder()
-#lab_encoder_sex.fit(titanic_train['Pclass'])
-#print(lab_encoder_sex.classes_)
-#titanic_train['PassengerId'] = lab_encoder_sex.transform(titanic_train['PassengerId'])
-#
-
-
- 
-#
-#def impute_cat_column(series):
-#    print(series)    
-#
-#    if not series.dtype.kind in 'biufc':  
-#        series = series.replace(np.NaN, 'Unknown')        
+#def cast_cont_to_cat(df, features):
+#    for feature in df.columns:
+#        df[feature] = df[feature].astype('category')
 #        
-#    le = LabelEncoder()
+#        
+
+
+combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df)
+
+
+
+X_train = pd.DataFrame()
+X_train = X_train.join(combined_categorical_preprocessed_df,how = 'outer')
+X_train = X_train.join(combined_continuous_preprocessed_df,how = 'outer')
+
+
+
+
+classifier = tree.DecisionTreeClassifier()
+
+y_train = target_series
+classifier.fit(X_train, y_train)
+
+
+scores = model_selection.cross_validate(classifier,  X_train, y_train, cv = 10)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#
+#def label_and_one_hot_encode(series):
+##    print(series)
+#    series = series.tolist()
+#    
+#    le = preprocessing.LabelEncoder()
 #    le.fit(series)
 #    series = le.transform(series)
-#    return series
 #    
-#combined_categorical_processed_df = pd.DataFrame()
+#    ohe = preprocessing.OneHotEncoder(categories='auto')
+#    length = len(series)
+#    series = series.reshape(length, 1)
 #
-#combined_categorical_processed_df = combined_categorical_df.apply(impute_cat_column)
-
-
-
-
-
-
-
-
-
-
-
+#    ohe.fit(series)
+#    series = ohe.transform(series)
+#    return series
+#
+#combined_categorical_df = combined_categorical_df.apply(label_and_one_hot_encode)
+#
+#
 
 
 
