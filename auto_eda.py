@@ -23,7 +23,14 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.impute import SimpleImputer
 
 from sklearn import tree, model_selection
+from sklearn.externals.six import StringIO  
+from IPython.display import Image  
+from sklearn.tree import export_graphviz
+import pydotplus
+import io
 
+import os
+import pydot
 
 
 #from sklearn_pandas import CategoricalImputer
@@ -45,7 +52,7 @@ hashing_dimention = 2
 
 target_column = 'Survived'
 
-target_series = pd.Series()
+y_train = pd.Series()
 
 def is_valid(text_str):
     if (text_str == np.nan) or (text_str == None) or (text_str == 'nan') or (text_str == ''):
@@ -219,7 +226,7 @@ def cont_preprocess(df_original):
     for column_name in df.columns:    
         series = df[column_name]
         
-        if series.count() < .1 * target_series.shape[0]:
+        if series.count() < .1 * y_train.shape[0]:
             log_column_str = '[' + column_name +']'
             print('WARNING: ' , log_column_str, ' Continuous column has less than 10% data. Try increasing auto_min_entries_in_continous_column so it can be considered caregorical')
             
@@ -231,6 +238,100 @@ def cont_preprocess(df_original):
     df[features] = imp.transform(df[features])    
 
     return df
+
+
+
+
+def analyze_tree(dt, X_train, y_train, filename = 'tree.pdf'):
+    dot_data = StringIO()
+    
+    os.getcwd()
+    file_path = os.path.join(os.getcwd(), filename)
+    
+    export_graphviz(dt, out_file=dot_data,  
+                    filled=True, rounded=True,
+                    feature_names = X_train.columns, class_names = y_train.name)
+    graph = pydotplus.graph_from_dot_data(dot_data.getvalue()) 
+     
+    #Image(graph.create_png())
+    
+    graph = pydot.graph_from_dot_data(dot_data.getvalue())[0] 
+    graph.write_pdf(file_path)
+
+
+
+    feature_importance_df = pd.DataFrame()
+    feature_importance_df['Name'] = X_train.columns
+    feature_importance_df['Importance'] = dt.feature_importances_
+    
+    max_depth = dt.tree_.max_depth
+
+    
+    results =   {
+                    'Feature Importance': feature_importance_df,
+                    'Max Depth': max_depth
+                
+                }
+    return results
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -285,7 +386,7 @@ for idx, column in enumerate(train.columns):
                 
                 
             else:
-                target_series = temp_column        
+                y_train = temp_column        
                 
                 
         else:    
@@ -542,17 +643,29 @@ X_train = X_train.join(combined_categorical_preprocessed_df,how = 'outer')
 X_train = X_train.join(combined_continuous_preprocessed_df,how = 'outer')
 
 
+#tree
+dt = tree.DecisionTreeClassifier()
+dt.fit(X_train, y_train)
+
+results = analyze_tree(dt, X_train, y_train)
 
 
-classifier = tree.DecisionTreeClassifier()
-
-y_train = target_series
-classifier.fit(X_train, y_train)
 
 
-scores = model_selection.cross_validate(classifier,  X_train, y_train, cv = 10)
 
 
+
+
+#classifier = tree.DecisionTreeClassifier()
+#
+#grid = {
+#        'criterion': ['gini','entropy'] ,
+#        'max_depth': []
+#            
+#        }
+#
+#
+#
 
 
 
@@ -642,7 +755,7 @@ scores = model_selection.cross_validate(classifier,  X_train, y_train, cv = 10)
 #
 #
 #def convert_non_to_unknown(column_series):
-#    if not column_series.shape[0] == target_series.shape[0]:
+#    if not column_series.shape[0] == y_train.shape[0]:
 #        
 
 #
