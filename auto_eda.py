@@ -35,9 +35,18 @@ import pydot
 
 #from sklearn_pandas import CategoricalImputer
 
+### To Do: Convert comma to space
+
+file_path = os.path.join(os.getcwd(), 'train.csv')
+train = pd.read_csv(file_path, index_col = False)
+
+file_path = os.path.join(os.getcwd(), 'pass_nationalities.csv')
+name_prism = pd.read_csv(file_path, index_col = False)
+name_prism_train = name_prism[:train.shape[0]]
+
+train['nationality'] = name_prism_train['Nationality']
 
 
-train = pd.read_csv('/home/pt/Documents/auto_eda/train.csv', index_col = False)
 
 
 train.info()
@@ -242,7 +251,7 @@ def cont_preprocess(df_original):
 
 
 
-def analyze_tree(dt, X_train, y_train, filename = 'tree.pdf'):
+def analyze_tree(dt, X_train, y_train, max_depth_search_list_length = 10, filename = 'tree.pdf'):
     dot_data = StringIO()
     
     os.getcwd()
@@ -266,15 +275,27 @@ def analyze_tree(dt, X_train, y_train, filename = 'tree.pdf'):
     
     max_depth = dt.tree_.max_depth
 
+    #this works even if max_depth is less than max_depth_search_list_length
+    max_depth_search_list = np.linspace(1,max_depth,max_depth_search_list_length)
+    max_depth_search_list = max_depth_search_list.astype(int)
+    max_depth_search_list = np.unique(max_depth_search_list)
+    max_depth_search_list = max_depth_search_list.tolist()
+    
+    #more evenly spaced numbers but gives extra values
+    
+#    increment = (max_depth-1) //max_depth_search_list_length
+#    if increment == 0:
+#        increment = 1
+#        
+#    max_depth_search_list = list(range(1,max_depth,increment))
+#    max_depth_search_list.append(max_depth)
+#    
     
     results =   {
-                    'Feature Importance': feature_importance_df,
-                    'Max Depth': max_depth
-                
+                    'feature_importance': feature_importance_df,
+                    'max_depth_search_list': max_depth_search_list
                 }
     return results
-
-
 
 
 
@@ -433,7 +454,7 @@ for index, row in column_properties_df.iterrows():
 #        cleaned_and_split_df  = train[column_name_in_train_df].apply(clean_and_split_text)
         
         cleaned_and_split_df  = train[column_name_in_train_df].apply(clean_text, filters = '\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n')
-                                     
+                                              
         cleaned_and_split_df  = cleaned_and_split_df.apply(split_text, split_at = ' ')  
         
         cleaned_and_split_df = cleaned_and_split_df.apply(split_at_char_int_transistion)
@@ -644,28 +665,10 @@ X_train = X_train.join(combined_continuous_preprocessed_df,how = 'outer')
 
 
 #tree
-dt = tree.DecisionTreeClassifier()
-dt.fit(X_train, y_train)
+dtree = tree.DecisionTreeClassifier()
+dtree.fit(X_train, y_train)
 
-results = analyze_tree(dt, X_train, y_train)
-
-
-
-
-
-
-
-
-#classifier = tree.DecisionTreeClassifier()
-#
-#grid = {
-#        'criterion': ['gini','entropy'] ,
-#        'max_depth': []
-#            
-#        }
-#
-#
-#
+dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list_length = 10)
 
 
 
@@ -674,6 +677,26 @@ results = analyze_tree(dt, X_train, y_train)
 
 
 
+dtree = tree.DecisionTreeClassifier(presort = True)
+
+dt_param_grid = {
+        'criterion': ['gini','entropy'] ,
+        'max_depth': dtree_pre_analysis['max_depth_search_list']  ,
+        'min_samples_split': list(range(2,50,1)),
+        'min_samples_leaf': list(range(1,50,1)),
+        }
+
+dt_grid_estimator = model_selection.GridSearchCV(dtree, dt_param_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 3, return_train_score = True)
+
+dt_grid_estimator.fit(X_train, y_train)
+
+dt_grid_estimator_result = dt_grid_estimator.cv_results_
+
+dt_grid_estimator.best_score_
+dt_grid_estimator.best_params_
+
+
+dtree_post_analysis = analyze_tree(dt_grid_estimator.best_estimator_, X_train, y_train)
 
 
 
