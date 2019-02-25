@@ -37,10 +37,12 @@ import pydot
 
 ### To Do: Convert comma to space
 
-file_path = os.path.join(os.getcwd(), 'train.csv')
+directory = '/home/pt/Documents/auto_eda'
+
+file_path = os.path.join(directory, 'train.csv')
 train = pd.read_csv(file_path, index_col = False)
 
-file_path = os.path.join(os.getcwd(), 'pass_nationalities.csv')
+file_path = os.path.join(directory, 'pass_nationalities.csv')
 name_prism = pd.read_csv(file_path, index_col = False)
 name_prism_train = name_prism[:train.shape[0]]
 
@@ -442,6 +444,11 @@ print()
 print()
 print('Cleaning text in unresolved columns')
 
+
+
+column_split_mapper_dict = {}
+
+
 # Clean text columns
 auto_generated_data_df = pd.DataFrame()
 for index, row in column_properties_df.iterrows():
@@ -467,6 +474,8 @@ for index, row in column_properties_df.iterrows():
 
         #rename columnn names to include original name
         multi_column_df = multi_column_df.rename(columns = lambda x : column_name_in_train_df + '_' + str(x))
+        
+        column_split_mapper_dict[column_name_in_train_df] = list(multi_column_df.columns)
 
         #pd.concat(auto_generated_categories, tags)
         auto_generated_data_df = auto_generated_data_df.join(multi_column_df, how = 'outer')
@@ -503,6 +512,10 @@ for column in auto_generated_data_df.columns:
         pass     
 
 
+
+
+group_dict_lookup_dict = {}
+
 for column in auto_generated_data_df.columns:
         
     if column == target_column:
@@ -521,6 +534,7 @@ for column in auto_generated_data_df.columns:
 #    if column == 'Ticket_2':
 #        print('Type: ', type(auto_generated_hash_df[column] ))
 
+    group_dict_lookup_dict[column] = group_dict
     
     for key in group_dict.keys():        
         if is_valid(key):
@@ -592,8 +606,17 @@ auto_generated_data_df_categorical = auto_generated_data_df_categorical.dropna(a
 #            sns.FacetGrid(train, hue = "Survived", height=6).map(sns.distplot, 'temp', kde = False).add_legend()  
 
 
-
-            
+#column_split_mapper_dict
+#group_dict_lookup_dict
+#
+#for main_column in column_split_mapper_dict.keys():
+#    for sub_column in column_split_mapper_dict[main_column]:
+#        print(main_column,  '>', sub_column, '  ', group_dict_lookup_dict[sub_column].keys() )
+#        
+#        
+#    print()
+#
+#            
 
 
 print('Showing plots for auto-generated Continuous Data')
@@ -639,7 +662,9 @@ for column in auto_generated_hash_df.columns:
 
 combined_categorical_df = pd.DataFrame()
 combined_categorical_df = train_categorical.join(auto_generated_data_df_categorical,how = 'outer')
-combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
+#combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
+
+
 combined_categorical_preprocessed_df = cat_preprocess(combined_categorical_df)
 
 
@@ -658,6 +683,11 @@ combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_cont
 combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df)
 
 
+#drop columns
+combined_continuous_preprocessed_df = combined_continuous_preprocessed_df.drop(columns = ['PassengerId'])
+
+combined_continuous_preprocessed_df.columns
+
 
 X_train = pd.DataFrame()
 X_train = X_train.join(combined_categorical_preprocessed_df,how = 'outer')
@@ -675,28 +705,54 @@ dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list
 
 
 
+#
+#
+#dtree = tree.DecisionTreeClassifier(presort = True)
+#
+#dt_param_grid = {
+#        'criterion': ['gini','entropy'] ,
+#        'max_depth': dtree_pre_analysis['max_depth_search_list']  ,
+#        'min_samples_split': list(range(2,50,1)),
+#        'min_samples_leaf': list(range(1,50,1)),
+#        }
+#
+#dt_grid_estimator = model_selection.GridSearchCV(dtree, dt_param_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True)
+#
+#dt_grid_estimator.fit(X_train, y_train)
+#
+#dt_grid_estimator_result = dt_grid_estimator.cv_results_
+#
+#dt_grid_estimator.best_score_
+#dt_grid_estimator.best_params_
+#
+#
+#dtree_post_analysis = analyze_tree(dt_grid_estimator.best_estimator_, X_train, y_train)
+#
+#
 
 
-dtree = tree.DecisionTreeClassifier(presort = True)
-
-dt_param_grid = {
-        'criterion': ['gini','entropy'] ,
-        'max_depth': dtree_pre_analysis['max_depth_search_list']  ,
-        'min_samples_split': list(range(2,50,1)),
-        'min_samples_leaf': list(range(1,50,1)),
-        }
-
-dt_grid_estimator = model_selection.GridSearchCV(dtree, dt_param_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 3, return_train_score = True)
-
-dt_grid_estimator.fit(X_train, y_train)
-
-dt_grid_estimator_result = dt_grid_estimator.cv_results_
-
-dt_grid_estimator.best_score_
-dt_grid_estimator.best_params_
 
 
-dtree_post_analysis = analyze_tree(dt_grid_estimator.best_estimator_, X_train, y_train)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -728,6 +784,7 @@ dtree_post_analysis = analyze_tree(dt_grid_estimator.best_estimator_, X_train, y
 #combined_categorical_df = combined_categorical_df.apply(label_and_one_hot_encode)
 #
 #
+
 
 
 
