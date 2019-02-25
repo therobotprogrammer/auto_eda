@@ -505,11 +505,43 @@ auto_generated_data_df_dropped = pd.DataFrame()
 #convert possible numbers to numeric type
 for column in auto_generated_data_df.columns:
     #try to convert columns with all numbers to integers
-    try:
-        auto_generated_data_df[column] = pd.to_numeric(auto_generated_data_df[column])
-        print('Converted auto generated column to int: ', column)
-    except Exception:
-        pass     
+    for row in auto_generated_data_df[column]:
+
+        try:
+            auto_generated_data_df.iloc[row,column] = pd.to_numeric(auto_generated_data_df.iloc[row,column])
+            
+            print('Converted auto generated column to int: ', column)
+        except Exception:
+            pass     
+
+
+
+
+
+
+for column in column_split_mapper_dict.keys():
+    data_types = set()
+
+    all_sub_columns = column_split_mapper_dict[column]
+    for sub_column in all_sub_columns[::-1] :
+        
+        temp_df = pd.DataFrame()
+        
+        print (column, '>',sub_column)
+
+        
+        temp_df['data_type'] = auto_generated_data_df[sub_column].apply(lambda x: str(type(x)))
+        
+        group_obj = temp_df.groupby('data_type') 
+        group_dict = group_obj.groups
+
+        
+        if group_obj.size().shape[0] > 1 :
+            print (group_dict.keys())
+        
+        
+    print('longest entry: ', all_sub_columns[-1] )
+    
 
 
 
@@ -531,41 +563,44 @@ for column in auto_generated_data_df.columns:
     
     
     column_str = '[' + column +']'    
-#    if column == 'Ticket_2':
-#        print('Type: ', type(auto_generated_hash_df[column] ))
+    if column == 'Cabin_1':
+        print('Found' )
 
     group_dict_lookup_dict[column] = group_dict
     
-    for key in group_dict.keys():        
-        if is_valid(key):
-            members_in_group = group_dict[key].shape[0]
-            rows_to_discard = group_dict[key]
-            
-            if members_in_group > min_members_in_a_group:   
-                
-                # This if statement is to only print "Found groups in column:" once per column for which groups were found
-                if not found_new_feature:
-                    print('Found groups in column: ', column_str, ' unique categories: ', total_groups)    
-                
-                found_new_feature = True
-
-                print('>>> Group Name:     ' , key, '    members of caregory: ', members_in_group )
-                auto_generated_data_df_categorical.loc[rows_to_discard, column] = key  
-            else:
-                #mark all members with few members as discarded
-                rows_to_discard = group_dict[key]
-                auto_generated_data_df_categorical.loc[rows_to_discard, column] = np.nan                
     
-    ### To Do: Plot graphs later        
-    if found_new_feature:                
-        plt.figure()
-        ax = sns.countplot(auto_generated_data_df_categorical[column], hue = train[target_column])
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-        plt.tight_layout()
-        plt.show()
-        print()
-        print()
-        print()
+    if total_groups <= max_groups_in_categorical_data:
+    
+        for key in group_dict.keys():        
+            if is_valid(key):
+                members_in_group = group_dict[key].shape[0]
+                rows_to_discard = group_dict[key]
+                
+                if members_in_group > min_members_in_a_group:   
+                    
+                    # This if statement is to only print "Found groups in column:" once per column for which groups were found
+                    if not found_new_feature:
+                        print('Found groups in column: ', column_str, ' unique categories: ', total_groups)    
+                    
+                    found_new_feature = True
+    
+                    print('>>> Group Name:     ' , key, '    members of caregory: ', members_in_group )
+                    auto_generated_data_df_categorical.loc[rows_to_discard, column] = key  
+                else:
+                    #mark all members with few members as discarded
+                    rows_to_discard = group_dict[key]
+                    auto_generated_data_df_categorical.loc[rows_to_discard, column] = np.nan                
+        
+        ### To Do: Plot graphs later        
+        if found_new_feature:                
+            plt.figure()
+            ax = sns.countplot(auto_generated_data_df_categorical[column], hue = train[target_column])
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+            plt.tight_layout()
+            plt.show()
+            print()
+            print()
+            print()
 
     else:
 
