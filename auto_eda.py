@@ -516,28 +516,71 @@ for column in auto_generated_data_df.columns:
 
 
 
+new_expanded_df = pd.DataFrame(index=range(0,auto_generated_data_df.shape[0]))
 
 
+def get_type(data):
+    
+
+    try:
+        #while data is turned before to numeric, when it is passed by apply, it changes to float
+        data = float(data)
+    except Exception:
+        pass     
+
+    if type(data) == float:
+        if math.isnan(data):
+            return np.nan
+
+    return str(type(data))
+    
+    
 
 for column in column_split_mapper_dict.keys():
     data_types = set()
 
     all_sub_columns = column_split_mapper_dict[column]
-    for sub_column in all_sub_columns[::-1] :
+    
+    
+    for sub_column in all_sub_columns:
         
-        temp_df = pd.DataFrame()
+
+        temp_df = pd.DataFrame(index=range(0,auto_generated_data_df[sub_column].shape[0]))
+
         
         print (column, '>',sub_column)
 
         
-        temp_df['data_type'] = auto_generated_data_df[sub_column].apply(lambda x: str(type(x)))
+        temp_df['datatype'] = auto_generated_data_df[sub_column].apply(get_type)
         
-        group_obj = temp_df.groupby('data_type') 
+        group_obj = temp_df.groupby('datatype') 
         group_dict = group_obj.groups
 
         
+        ############# Work Here
         if group_obj.size().shape[0] > 1 :
-            print (group_dict.keys())
+            
+            for key in group_dict.keys():
+                
+                if key!= 'NAN_DATA':
+                    new_column_name = sub_column + '_' + str(key)
+                    
+                    
+                    rows = group_dict[key]
+                    
+                    new_expanded_df.loc[rows, new_column_name] = auto_generated_data_df.loc[rows, sub_column]
+                    
+                    
+                    #drop the column if its all nan
+                    #new_expanded_df[new_column_name] = new_expanded_df[new_column_name].dropna()
+                    
+    #                if new_expanded_df[new_column_name] 
+    
+    #                
+    #                temp_df.loc[rows, new_column_name] = auto_generated_data_df.loc[rows, sub_column]
+                
+                 
+                print (group_dict.keys())
         
         
     print('longest entry: ', all_sub_columns[-1] )
