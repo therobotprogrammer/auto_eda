@@ -490,7 +490,7 @@ print('Finding possible groups in cleaned data')
  
 auto_generated_data_df.columns
 #auto_generated_data_df_raw = auto_generated_data_df
-auto_generated_data_df_categorical = auto_generated_data_df.copy(deep = True)
+auto_generated_data_df_categorical = pd.DataFrame(index=range(train.shape[0]))
 
 #this is only to generate graphs. seaborn needs same dataframe for faced grids
 #auto_generated_data_df[target_column] = train[target_column]
@@ -606,20 +606,22 @@ for column in auto_generated_data_df.columns:
     
     
     column_str = '[' + column +']'    
-    if column == 'Cabin_1':
+    if column == 'Cabin_0':
         print('Found' )
 
     group_dict_lookup_dict[column] = group_dict
     
     
     if total_groups <= max_groups_in_categorical_data:
-    
+        auto_generated_data_df_categorical[column] = np.nan
+        
         for key in group_dict.keys():        
             if is_valid(key):
                 members_in_group = group_dict[key].shape[0]
                 rows_to_discard = group_dict[key]
                 
                 if members_in_group > min_members_in_a_group:   
+                    
                     
                     # This if statement is to only print "Found groups in column:" once per column for which groups were found
                     if not found_new_feature:
@@ -629,11 +631,13 @@ for column in auto_generated_data_df.columns:
     
                     print('>>> Group Name:     ' , key, '    members of caregory: ', members_in_group )
                     auto_generated_data_df_categorical.loc[rows_to_discard, column] = key  
-                else:
-                    #mark all members with few members as discarded
-                    rows_to_discard = group_dict[key]
-                    auto_generated_data_df_categorical.loc[rows_to_discard, column] = np.nan                
-        
+#                else:
+#                    #mark all members with few members as discarded
+#                    rows_to_discard = group_dict[key]
+#                    auto_generated_data_df_categorical.loc[rows_to_discard, column] = np.nan                
+        if auto_generated_data_df_categorical[column].isnull().values.any():
+            auto_generated_data_df_categorical.drop(columns = [column])
+            print('dropped empty column:', column)
         ### To Do: Plot graphs later        
         if found_new_feature:                
             plt.figure()
@@ -668,7 +672,11 @@ for column in auto_generated_data_df.columns:
                 print('Type: ', type(auto_generated_data_df[column][1]))
                 auto_generated_hash_df[column] = auto_generated_data_df[column].copy(deep = True)
                 auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(str)
-                auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(hash_it)            
+                auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(hash_it)   
+                
+                
+                
+                
                 pass
 
         else:
@@ -740,7 +748,7 @@ for column in auto_generated_hash_df.columns:
 
 combined_categorical_df = pd.DataFrame()
 combined_categorical_df = train_categorical.join(auto_generated_data_df_categorical,how = 'outer')
-#combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
+combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
 
 
 combined_categorical_preprocessed_df = cat_preprocess(combined_categorical_df)
