@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn import preprocessing
+from sklearn import preprocessing, neighbors
 from sklearn.preprocessing import LabelEncoder
 import keras
 import math
@@ -48,7 +48,7 @@ name_prism_train = name_prism[:train.shape[0]]
 
 train['nationality'] = name_prism_train['Nationality']
 
-
+show_plots = False
 
 
 train.info()
@@ -59,6 +59,7 @@ min_members_in_a_group = 5
 
 auto_min_entries_in_continous_column = 10
 hashing_dimention = 2
+min_data_in_column_percent = 0 #percent of nan . To Do: This should also be applied to continuous
 
 
 target_column = 'Survived'
@@ -185,32 +186,44 @@ def hash_it(text):
 
 
 
-def cat_preprocess(df_original, strategy = 'seperate_unknown'):    
+def cat_preprocess(df_original, strategy = 'seperate_unknown', ):    
+    
+    assert (min_data_in_column_percent >= 0 and min_data_in_column_percent <= 1), 'min_data_in_column_percent out of range 0 to 1'
+        
     
     df = df_original.copy(deep = True)
         
     sys_min = -sys.maxsize -1   
    
-    for column_name in df.columns:    
-        series = df[column_name]
+    for column_name in df.columns:  
+        total_nan = combined_categorical_df[column_name].isna().sum()
+        total_real_data = df.shape[0] -total_nan
+        total_real_data_percentage = total_real_data / df.shape[0]
         
-        if strategy == 'seperate_unknown':
+        if total_real_data_percentage < min_data_in_column_percent:
+            auto_generated_data_df_dropped[column_name + '_failed_drop_threshold_percent_' + str(min_data_in_column_percent)] = df[column_name].copy(deep = True)
+            df.drop(columns = column_name, inplace = True)            
             
-            if series.dtype.kind in 'biufc': 
-                #convert NaN to number
-                series = series.replace(np.NaN, sys_min)
+        else:    
+            series = df[column_name]
+            
+            if strategy == 'seperate_unknown':
+                
+                if series.dtype.kind in 'biufc': 
+                    #convert NaN to number
+                    series = series.replace(np.NaN, sys_min)
+                else:
+                    series = series.replace(np.NaN, 'Unknown')                          
             else:
-                series = series.replace(np.NaN, 'Unknown')                          
-        else:
-            ci = CategoricalImputer()
-            ci.fit(series)
-            series = ci.transform(series)   
-            
-        # label encode. label encoder does not work directly on multiple columns so its in for loop    
-        le = preprocessing.LabelEncoder()
-        le.fit(series)
-        series = le.transform(series)        
-        df[column_name] = series       
+                ci = CategoricalImputer()
+                ci.fit(series)
+                series = ci.transform(series)   
+                
+            # label encode. label encoder does not work directly on multiple columns so its in for loop    
+            le = preprocessing.LabelEncoder()
+            le.fit(series)
+            series = le.transform(series)        
+            df[column_name] = series       
  
     
 #    ohe = preprocessing.OneHotEncoder(categories = 'auto')
@@ -278,10 +291,12 @@ def analyze_tree(dt, X_train, y_train, max_depth_search_list_length = 10, filena
     max_depth = dt.tree_.max_depth
 
     #this works even if max_depth is less than max_depth_search_list_length
-    max_depth_search_list = np.linspace(1,max_depth,max_depth_search_list_length)
-    max_depth_search_list = max_depth_search_list.astype(int)
-    max_depth_search_list = np.unique(max_depth_search_list)
-    max_depth_search_list = max_depth_search_list.tolist()
+#    max_depth_search_list = np.linspace(1,max_depth,max_depth_search_list_length)
+#    max_depth_search_list = max_depth_search_list.astype(int)
+#    max_depth_search_list = np.unique(max_depth_search_list)
+#    max_depth_search_list = max_depth_search_list.tolist()
+    
+    max_depth_search_list = get_equally_spaced_numbers_in_range(1, max_depth, max_depth_search_list_length )
     
     #more evenly spaced numbers but gives extra values
     
@@ -302,27 +317,12 @@ def analyze_tree(dt, X_train, y_train, max_depth_search_list_length = 10, filena
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def get_equally_spaced_numbers_in_range(min_num = 1, max_num =100, total_numbers =10):
+    equally_spaced_numbers_list = np.linspace(min_num, max_num,total_numbers)
+    equally_spaced_numbers_list = equally_spaced_numbers_list.astype(int)
+    equally_spaced_numbers_list = np.unique(equally_spaced_numbers_list)
+    equally_spaced_numbers_list = equally_spaced_numbers_list.tolist()
+    return equally_spaced_numbers_list
 
 
 
@@ -400,10 +400,11 @@ for idx, column in enumerate(train.columns):
         
                         
             if column != target_column:
-                print(log_column_str, 'vs target ', log_target_str)
-                plt.figure()
-                sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
-                plt.show()
+                if show_plots:
+                    print(log_column_str, 'vs target ', log_target_str)
+                    plt.figure()
+                    sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
+                    plt.show()
 #                sns.factorplot(x="Embarked", hue="Survived", data=titanic_train, kind="count", height=6)
                 train_categorical[column] = temp_column
                 
@@ -415,9 +416,10 @@ for idx, column in enumerate(train.columns):
         else:    
             if train[column].dtypes != 'O' and column != target_column:        
                 try:
-                        plt.figure()
-                        sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()  
-                        plt.show()
+                        if show_plots:
+                            plt.figure()
+                            sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()  
+                            plt.show()
                         column_properties_df.loc[column, 'categorical'] = False
                         
                         train_continuous[column] = train[column]
@@ -639,12 +641,13 @@ for column in auto_generated_data_df.columns:
             auto_generated_data_df_categorical.drop(columns = [column])
             print('dropped empty column:', column)
         ### To Do: Plot graphs later        
-        if found_new_feature:                
-            plt.figure()
-            ax = sns.countplot(auto_generated_data_df_categorical[column], hue = train[target_column])
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-            plt.tight_layout()
-            plt.show()
+        if found_new_feature:
+            if show_plots:                
+                plt.figure()
+                ax = sns.countplot(auto_generated_data_df_categorical[column], hue = train[target_column])
+                ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+                plt.tight_layout()
+                plt.show()
             print()
             print()
             print()
@@ -718,11 +721,12 @@ for column in auto_generated_data_df_continuous.columns:
     
     try:
         auto_generated_data_df_continuous[column] = pd.to_numeric(auto_generated_data_df_continuous[column])
-        sns.FacetGrid(auto_generated_data_df_continuous, hue = target_column, height=6).map(sns.distplot, column, kde = True).add_legend()             
-        sns.FacetGrid(auto_generated_data_df_continuous, hue = target_column, height=6).map(sns.distplot, column, kde = False).add_legend()     
-       
-        plt.tight_layout()
-        plt.show()        
+        if show_plots:
+            sns.FacetGrid(auto_generated_data_df_continuous, hue = target_column, height=6).map(sns.distplot, column, kde = True).add_legend()             
+            sns.FacetGrid(auto_generated_data_df_continuous, hue = target_column, height=6).map(sns.distplot, column, kde = False).add_legend()     
+           
+            plt.tight_layout()
+            plt.show()        
     
     except Exception:
         print('There is non numeric data in auto_generated_data_df_continuous. This should not have happened')
@@ -737,17 +741,19 @@ for column in auto_generated_hash_df.columns:
         continue
     
     try:
-        ax = sns.countplot(auto_generated_hash_df[column], hue = train[target_column])
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-        plt.tight_layout()
-        plt.show()           
+        if show_plots:
+            ax = sns.countplot(auto_generated_hash_df[column], hue = train[target_column])
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+            plt.tight_layout()
+            plt.show()           
     except Exception:
         pass  
                         
 
 
 combined_categorical_df = pd.DataFrame()
-combined_categorical_df = train_categorical.join(auto_generated_data_df_categorical,how = 'outer')
+combined_categorical_df = combined_categorical_df.join(train_categorical,how = 'outer')
+combined_categorical_df = combined_categorical_df.join(auto_generated_data_df_categorical,how = 'outer')
 combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
 
 
@@ -778,21 +784,18 @@ combined_continuous_preprocessed_df.columns
 X_train = pd.DataFrame()
 X_train = X_train.join(combined_categorical_preprocessed_df,how = 'outer')
 X_train = X_train.join(combined_continuous_preprocessed_df,how = 'outer')
-
-
-#tree
-dtree = tree.DecisionTreeClassifier()
-dtree.fit(X_train, y_train)
-
-dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list_length = 10)
-
-
-
-
-
-
 #
 #
+##tree
+#dtree = tree.DecisionTreeClassifier()
+#dtree.fit(X_train, y_train)
+#
+#dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list_length = 10)
+
+
+####################################################################################################3
+
+
 #dtree = tree.DecisionTreeClassifier(presort = True)
 #
 #dt_param_grid = {
@@ -814,7 +817,110 @@ dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list
 #
 #dtree_post_analysis = analyze_tree(dt_grid_estimator.best_estimator_, X_train, y_train)
 #
-#
+
+####################################################################################################3
+
+
+
+
+#Scale data for KNN. Here scaling should only be done for continuous. 
+#Doing it on categorical isnt harmful but wastes CPU compute
+#it is only done for simplicity as dataset is very small
+
+
+
+
+scaler = preprocessing.StandardScaler()
+X_train = scaler.fit_transform(X_train[X_train.columns])
+
+knn = neighbors.KNeighborsClassifier()
+
+    
+n_neighbours = get_equally_spaced_numbers_in_range(1, (X_train.shape[0]) /10, 100) 
+    
+# 'algorithm': ['ball_tree', 'kd_tree', 'brute'] ,
+
+knn_param_grid = {
+                    'n_neighbors' : n_neighbours , 
+                    'weights' : ['uniform', 'distance'] ,
+                }
+knn_grid_estimator = model_selection.GridSearchCV(knn, knn_param_grid,  return_train_score = True, scoring = 'accuracy', n_jobs = -1)
+
+knn_grid_estimator.fit(X_train, y_train)
+
+results = knn_grid_estimator.cv_results_
+
+print('Best Knn Score: ', knn_grid_estimator.best_score_)
+
+print('mean_train_score: ', results.get('mean_train_score').mean())
+print('mean_test_score: ', results.get('mean_test_score').mean())
+
+
+knn_grid_estimator_results = knn_grid_estimator.cv_results_['params']
+
+knn_grid_estimator.best_params_
+
+
+
+X_train_dropped = X_train
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
