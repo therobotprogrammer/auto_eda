@@ -33,6 +33,15 @@ import os
 import pydot
 
 
+import plotly 
+
+import plotly.plotly as py
+import plotly.graph_objs as go
+
+
+
+# ALL TO DO
+# try without using missing data
 
 auto_generated_data_df_dropped = pd.DataFrame()
 
@@ -1015,33 +1024,100 @@ if use_extra_trees:
 
 
 
+
 #####################################################################
 # Boosting
   
 # Adaboost with decision tree
-base_classifier = tree.DecisionTreeClassifier()
+    
+def plot_3d(grid_estimator, plot_type = 'mesh'):
+    cv_results_ = grid_estimator.cv_results_
+    #params_df = cv_results_['params']
+    params_df = pd.DataFrame(cv_results_['params'])
+    
+    column_names = params_df.columns
+    
+    if len(params_df.columns) == 2:     
+        x = params_df[column_names[0]]
+        y = params_df[column_names[1]]
+        
+        train_scores_df = pd.DataFrame(cv_results_['mean_train_score'])
+        train_scores = train_scores_df.iloc[:,0]
+        
+        test_scores_df = pd.DataFrame(cv_results_['mean_test_score'])
+        test_scores = test_scores_df.iloc[:,0]
+        
+        if plot_type == 'mesh':           
+            
+            trace_train = go.Mesh3d(x=x,y=y,z=train_scores,
+                       alphahull=3,
+                       opacity=.5,
+                       colorscale="Rainbow",
+                       intensity=train_scores,                        
+                       )
+            
+            trace_test = go.Mesh3d(x=x,y=y,z=test_scores,
+                       alphahull=3,
+                       opacity=.25,
+                       colorscale="Jet",
+                       intensity=test_scores,                        
+                       )
+            
+            traces = [trace_train, trace_test]
+        
+        elif plot_type == 'scatter':
+            trace_test = go.Scatter3d(
+                x=x,
+                y=y,
+                z=test_scores,
+                mode='markers',
+                marker=dict(
+                    size=12,
+                    color=test_scores,                # set color to an array/list of desired values
+                    colorscale='Viridis',   # choose a colorscale
+                    opacity=0.8
+                )
+            )
+                
+            traces = [trace_test]
+                   
+        plotly.offline.plot(traces)
 
-ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
-
-ada_boost_grid = {
-                    'n_estimators': get_equally_spaced_numbers_in_range(1,1000) ,
-                    'learning_rate': get_equally_spaced_non_zero_floats_in_range(0,1,20) ,
-        }
-
-ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
 
 
-ada_boost_grid_estimator.fit(X_train, y_train)
+
+#base_classifier = tree.DecisionTreeClassifier()
+#
+#ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
+#
+#ada_boost_grid = {
+#                    'n_estimators': get_equally_spaced_numbers_in_range(1,5000) ,
+#                    'learning_rate': get_equally_spaced_non_zero_floats_in_range(0,1,10) ,
+#        }
+#
+#ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+#
+#
+#ada_boost_grid_estimator.fit(X_train, y_train)
 
 print('Best SCore: ', ada_boost_grid_estimator.best_score_)
 print('Best Params: ', ada_boost_grid_estimator.best_params_)
 
+plot_3d(ada_boost_grid_estimator)
+
+results_ada_boost_grid_estimator = ada_boost_grid_estimator.cv_results_
 
 
-
-
+#Best SCore:  0.8013468013468014
+#Best Params:  {'learning_rate': 0.7000000000000001, 'n_estimators': 4444}
+#
+#print('Best Params: ', ada_boost_grid_estimator.best_params_)
+#Best Params:  {'learning_rate': 0.7000000000000001, 'n_estimators': 4444}
 
 #X_train['Ticket_2'].hist()
+
+
+
 
 
 
