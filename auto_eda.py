@@ -61,6 +61,8 @@ auto_min_entries_in_continous_column = 10
 hashing_dimention = 2
 min_data_in_column_percent = 0 #percent of nan . To Do: This should also be applied to continuous
 
+#to do: hash char as a to z and int as a range
+#to do: for things that are hashed, use box plot etc
 
 target_column = 'Survived'
 
@@ -802,7 +804,7 @@ dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list
 
 ####################################################################################################3
 
-use_dtree = True
+use_dtree = False
 if use_dtree:
     dtree = tree.DecisionTreeClassifier(presort = True)
     
@@ -924,7 +926,7 @@ if use_bag_knn:
 
 
 ### Random Forest
-use_random_forest = False
+use_random_forest = True
 if use_random_forest:
     rf_estimator = ensemble.RandomForestClassifier()
     
