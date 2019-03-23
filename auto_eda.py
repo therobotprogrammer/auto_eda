@@ -22,7 +22,7 @@ from sklearn_pandas import CategoricalImputer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.impute import SimpleImputer
 
-from sklearn import tree, model_selection
+from sklearn import tree, model_selection, ensemble
 from sklearn.externals.six import StringIO  
 from IPython.display import Image  
 from sklearn.tree import export_graphviz
@@ -636,7 +636,9 @@ for column in auto_generated_data_df.columns:
 #                else:
 #                    #mark all members with few members as discarded
 #                    rows_to_discard = group_dict[key]
-#                    auto_generated_data_df_categorical.loc[rows_to_discard, column] = np.nan                
+#                    auto_generated_data_df_categorical.loc[rows_to_discard, column] = np.nan   
+                    
+        #To Do: Figure out if this dropping is a good idea. Also add it to drop dataframe
         if auto_generated_data_df_categorical[column].isnull().values.any():
             auto_generated_data_df_categorical.drop(columns = [column])
             print('dropped empty column:', column)
@@ -776,7 +778,12 @@ combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df)
 
 
 #drop columns
-combined_continuous_preprocessed_df = combined_continuous_preprocessed_df.drop(columns = ['PassengerId'])
+# passenger id is dropped as it uniquely identifies the row. This causes overfitting when a lot of trees are used. The model
+# remembers the passenger id and result
+manually_dropped_columns = pd.DataFrame()
+columns_to_drop = ['PassengerId']
+manually_dropped_columns[columns_to_drop] = combined_continuous_preprocessed_df[columns_to_drop].copy(deep=True)
+combined_continuous_preprocessed_df = combined_continuous_preprocessed_df.drop(columns = columns_to_drop)
 
 combined_continuous_preprocessed_df.columns
 
@@ -786,37 +793,38 @@ X_train = X_train.join(combined_categorical_preprocessed_df,how = 'outer')
 X_train = X_train.join(combined_continuous_preprocessed_df,how = 'outer')
 #
 #
-##tree
-#dtree = tree.DecisionTreeClassifier()
-#dtree.fit(X_train, y_train)
-#
-#dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list_length = 10)
+#tree
+dtree = tree.DecisionTreeClassifier()
+dtree.fit(X_train, y_train)
+
+dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list_length = 10)
 
 
 ####################################################################################################3
 
-
-#dtree = tree.DecisionTreeClassifier(presort = True)
-#
-#dt_param_grid = {
-#        'criterion': ['gini','entropy'] ,
-#        'max_depth': dtree_pre_analysis['max_depth_search_list']  ,
-#        'min_samples_split': list(range(2,50,1)),
-#        'min_samples_leaf': list(range(1,50,1)),
-#        }
-#
-#dt_grid_estimator = model_selection.GridSearchCV(dtree, dt_param_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True)
-#
-#dt_grid_estimator.fit(X_train, y_train)
-#
-#dt_grid_estimator_result = dt_grid_estimator.cv_results_
-#
-#dt_grid_estimator.best_score_
-#dt_grid_estimator.best_params_
-#
-#
-#dtree_post_analysis = analyze_tree(dt_grid_estimator.best_estimator_, X_train, y_train)
-#
+use_dtree = True
+if use_dtree:
+    dtree = tree.DecisionTreeClassifier(presort = True)
+    
+    dt_param_grid = {
+            'criterion': ['gini','entropy'] ,
+            'max_depth': dtree_pre_analysis['max_depth_search_list']  ,
+            'min_samples_split': list(range(2,50,1)),
+            'min_samples_leaf': list(range(1,50,1)),
+            }
+    
+    dt_grid_estimator = model_selection.GridSearchCV(dtree, dt_param_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True)
+    
+    dt_grid_estimator.fit(X_train, y_train)
+    
+    results_dt_grid_estimator = dt_grid_estimator.cv_results_
+    
+    dt_grid_estimator.best_score_
+    dt_grid_estimator.best_params_
+    
+    
+    dtree_post_analysis = analyze_tree(dt_grid_estimator.best_estimator_, X_train, y_train)
+    
 
 ####################################################################################################3
 
@@ -827,75 +835,115 @@ X_train = X_train.join(combined_continuous_preprocessed_df,how = 'outer')
 #Doing it on categorical isnt harmful but wastes CPU compute
 #it is only done for simplicity as dataset is very small
 
+#To DO: Find which columns to drop. Performance improves by dropping columns
 
 
+#scaler = preprocessing.StandardScaler()
+#X_train = scaler.fit_transform(X_train[X_train.columns])
+#
+#knn = neighbors.KNeighborsClassifier()
+#
+#    
+#n_neighbours = get_equally_spaced_numbers_in_range(1, (X_train.shape[0]) /10, 100) 
+#    
+## 'algorithm': ['ball_tree', 'kd_tree', 'brute'] ,
+#
+#knn_param_grid = {
+#                    'n_neighbors' : n_neighbours , 
+#                    'weights' : ['uniform', 'distance'] ,
+#                }
+#knn_grid_estimator = model_selection.GridSearchCV(knn, knn_param_grid,  return_train_score = True, scoring = 'accuracy', n_jobs = -1)
+#
+#knn_grid_estimator.fit(X_train, y_train)
+#
+#results = knn_grid_estimator.cv_results_
+#
+#print('Best Knn Score: ', knn_grid_estimator.best_score_)
+#
+#print('mean_train_score: ', results.get('mean_train_score').mean())
+#print('mean_test_score: ', results.get('mean_test_score').mean())
+#
+#
+#knn_grid_estimator_results = knn_grid_estimator.cv_results_['params']
+#
+#knn_grid_estimator.best_params_
+#
+#
+#
+#X_train_dropped = X_train
+#
 
-scaler = preprocessing.StandardScaler()
-X_train = scaler.fit_transform(X_train[X_train.columns])
 
-knn = neighbors.KNeighborsClassifier()
+###############################################################################################
 
+#BAG Ensamble
+use_bag_tree = False
+if use_bag_tree:
+    dtree = tree.DecisionTreeClassifier()
     
-n_neighbours = get_equally_spaced_numbers_in_range(1, (X_train.shape[0]) /10, 100) 
+    bag_ensemble = ensemble.BaggingClassifier(base_estimator = dtree)
     
-# 'algorithm': ['ball_tree', 'kd_tree', 'brute'] ,
-
-knn_param_grid = {
-                    'n_neighbors' : n_neighbours , 
-                    'weights' : ['uniform', 'distance'] ,
-                }
-knn_grid_estimator = model_selection.GridSearchCV(knn, knn_param_grid,  return_train_score = True, scoring = 'accuracy', n_jobs = -1)
-
-knn_grid_estimator.fit(X_train, y_train)
-
-results = knn_grid_estimator.cv_results_
-
-print('Best Knn Score: ', knn_grid_estimator.best_score_)
-
-print('mean_train_score: ', results.get('mean_train_score').mean())
-print('mean_test_score: ', results.get('mean_test_score').mean())
-
-
-knn_grid_estimator_results = knn_grid_estimator.cv_results_['params']
-
-knn_grid_estimator.best_params_
+    bag_grid = {
+                    'n_estimators' : get_equally_spaced_numbers_in_range(800,2000),
+                    'base_estimator__criterion': ['gini','entropy'] ,
+                    'base_estimator__max_depth' : dtree_pre_analysis['max_depth_search_list'],
+    #                'base_estimator__min_samples_split' : list(range(2,50,1)) ,
+    #                'base_estimator__min_samples_leaf' :  list(range(1,50,1))                                               
+            }
+    
+    bag__tree_grid_estimator = model_selection.GridSearchCV(bag_ensemble, bag_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+    
+    bag__tree_grid_estimator.fit(X_train, y_train)
+    
+    print(bag__tree_grid_estimator.best_score_)
+    print(bag__tree_grid_estimator.best_params_)
+    final_estimator = bag__tree_grid_estimator.best_estimator_
+    final_estimator.score(X_train, y_train)
 
 
 
-X_train_dropped = X_train
+### BAG Ensamble with KNN
+use_bag_knn = False
 
-
-
-
-
-
-
-
-
-
-
-
+if use_bag_knn:    
+    knn_estimator = neighbors.KNeighborsClassifier()
+    
+    knn_bag_ensemble = ensemble.BaggingClassifier(base_estimator = knn_estimator)
+    
+    knn_bag_ensemble_param_grid = {
+                                        'n_estimators' : get_equally_spaced_numbers_in_range(1,100) ,
+                                        'base_estimator__n_neighbors': get_equally_spaced_numbers_in_range(1, (X_train.shape[0]) /10, 100)  
+                                }
+    
+    bag_knn_grid_estimator = model_selection.GridSearchCV(estimator = knn_bag_ensemble, param_grid = knn_bag_ensemble_param_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+    
+    bag_knn_grid_estimator.fit(X_train, y_train)
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+### Random Forest
+use_random_forest = False
+if use_random_forest:
+    rf_estimator = ensemble.RandomForestClassifier()
+    
+    rf_grid = {
+                'n_estimators' : get_equally_spaced_numbers_in_range(1,1000) ,
+                'max_depth' : dtree_pre_analysis['max_depth_search_list'],
+                'max_features': ['sqrt', 'log2']
+            }
+    
+    rf_grid_estimator = model_selection.GridSearchCV(rf_estimator, rf_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+    
+    rf_grid_estimator.fit(X_train, y_train)
+    
+    print('Best SCore: ', rf_grid_estimator.best_score_)
+    print('Best Params: ', rf_grid_estimator.best_params_)
+    #print('Best SCore: ', rf_grid_estimator.best_estimator_.feature_importances_)
+    
+    
+    results_rf_grid_estimator = rf_grid_estimator.cv_results_
 
 
 
