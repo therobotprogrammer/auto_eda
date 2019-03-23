@@ -33,6 +33,10 @@ import os
 import pydot
 
 
+
+auto_generated_data_df_dropped = pd.DataFrame()
+
+
 #from sklearn_pandas import CategoricalImputer
 
 ### To Do: Convert comma to space
@@ -204,6 +208,7 @@ def cat_preprocess(df_original, strategy = 'seperate_unknown', ):
         
         if total_real_data_percentage < min_data_in_column_percent:
             auto_generated_data_df_dropped[column_name + '_failed_drop_threshold_percent_' + str(min_data_in_column_percent)] = df[column_name].copy(deep = True)
+            
             df.drop(columns = column_name, inplace = True)            
             
         else:    
@@ -242,26 +247,41 @@ def cat_preprocess(df_original, strategy = 'seperate_unknown', ):
 
 
 
+def drop_and_log_column(df, column_name = None, reason = None):
+    auto_generated_data_df_dropped[column_name + '__' + reason] = df[column_name].copy(deep=True)
+    df.drop(columns = column_name, inplace = True)
+    
 
-
-
-def cont_preprocess(df_original):
+def cont_preprocess(df_original, missing_data_drop_threshold = None, imputer = 'SimpleImputer', si_strategy = 'mean', si_fill_value = np.finfo(np.float64).min):
     
     df = df_original.copy(deep = True)
 
-    for column_name in df.columns:    
+    all_columns = df.columns
+    
+    for column_name in all_columns:    
         series = df[column_name]
+        log_column_str = '[' + column_name +']'
+
         
-        if series.count() < .1 * y_train.shape[0]:
-            log_column_str = '[' + column_name +']'
-            print('WARNING: ' , log_column_str, ' Continuous column has less than 10% data. Try increasing auto_min_entries_in_continous_column so it can be considered caregorical')
+        if missing_data_drop_threshold == None and series.count() < .5 * y_train.shape[0]:
+            print('WARNING: ' , log_column_str, ' Continuous column has less than drop threshold' ,  missing_data_drop_threshold, 'Try increasing auto_min_entries_in_continous_column so it can be considered caregorical')
+
+        elif missing_data_drop_threshold != None and series.count() < missing_data_drop_threshold * y_train.shape[0]:            
+            print('WARNING: ' , log_column_str, ' DROPPED: Continuous column has less than drop threshold' ,  missing_data_drop_threshold, 'Try increasing auto_min_entries_in_continous_column so it can be considered caregorical')
+            
+            drop_and_log_column(df, column_name, '< missing_data_threshold. Cont')
             
     
     features = df.columns
     
-    imp = SimpleImputer()
-    imp.fit(df[features])
-    df[features] = imp.transform(df[features])    
+    if imputer == 'SimpleImputer':
+
+#            if si_strategy == 'constant':
+        imp = SimpleImputer(strategy = si_strategy, missing_values = np.nan, fill_value = si_fill_value)    
+#            elif 
+#                si_strategy == 'mean'
+        imp.fit(df[features])
+        df[features] = imp.transform(df[features])    
 
     return df
 
@@ -328,7 +348,12 @@ def get_equally_spaced_numbers_in_range(min_num = 1, max_num =100, total_numbers
 
 
 
-
+def get_equally_spaced_non_zero_floats_in_range(start = 0, stop =1, total_numbers = 10):        
+    step = (stop-start) / total_numbers
+    
+    if start == 0:
+        start = step
+    return(np.arange(start, stop + step, step).tolist())
 
 
 
@@ -502,7 +527,6 @@ auto_generated_data_df_categorical = pd.DataFrame(index=range(train.shape[0]))
 auto_generated_hash_df = pd.DataFrame()
 auto_generated_data_df_continuous = pd.DataFrame()
 
-auto_generated_data_df_dropped = pd.DataFrame()
 
 
 
@@ -776,7 +800,20 @@ combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_cont
 #        
 
 
-combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df)
+#combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df)
+
+#warning: turning off imputation
+
+#turn_off_cont_preprocessing = False
+#
+#if turn_off_cont_preprocessing:
+#    print('Warning: Continuous Features Preprocessing including Imputation turned off')
+#    combined_continuous_preprocessed_df = combined_continuous_df
+#else:
+    
+
+combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df, missing_data_drop_threshold = .5, si_strategy = 'constant', si_fill_value = -123456)
+    
 
 
 #drop columns
@@ -926,14 +963,17 @@ if use_bag_knn:
 
 
 ### Random Forest
-use_random_forest = True
+use_random_forest = False
 if use_random_forest:
     rf_estimator = ensemble.RandomForestClassifier()
     
     rf_grid = {
                 'n_estimators' : get_equally_spaced_numbers_in_range(1,1000) ,
                 'max_depth' : dtree_pre_analysis['max_depth_search_list'],
-                'max_features': ['sqrt', 'log2']
+                'max_features': ['sqrt', 'log2'],
+                
+#                'min_samples_split' : list(range(2,50,1)) ,
+#                'min_samples_leaf' :  list(range(1,50,1))   
             }
     
     rf_grid_estimator = model_selection.GridSearchCV(rf_estimator, rf_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
@@ -951,23 +991,57 @@ if use_random_forest:
 
 
 
+use_extra_trees = False
+if use_extra_trees:
+    et_estimator = ensemble.ExtraTreesClassifier()
+    
+    et_grid = {
+                'n_estimators' : get_equally_spaced_numbers_in_range(1,10000) ,
+                'max_depth' : dtree_pre_analysis['max_depth_search_list'],
+                'max_features': ['sqrt', 'log2']
+            }
+    
+    et_grid_estimator = model_selection.GridSearchCV(et_estimator, et_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+    
+    et_grid_estimator.fit(X_train, y_train)
+    
+    print('Best SCore: ', et_grid_estimator.best_score_)
+    print('Best Params: ', et_grid_estimator.best_params_)
+    #print('Best SCore: ', rf_grid_estimator.best_estimator_.feature_importances_)
+    
+    
+    results_et_grid_estimator = et_grid_estimator.cv_results_
+
+
+
+
+#####################################################################
+# Boosting
+  
+# Adaboost with decision tree
+base_classifier = tree.DecisionTreeClassifier()
+
+ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
+
+ada_boost_grid = {
+                    'n_estimators': get_equally_spaced_numbers_in_range(1,1000) ,
+                    'learning_rate': get_equally_spaced_non_zero_floats_in_range(0,1,20) ,
+        }
+
+ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+
+
+ada_boost_grid_estimator.fit(X_train, y_train)
+
+print('Best SCore: ', ada_boost_grid_estimator.best_score_)
+print('Best Params: ', ada_boost_grid_estimator.best_params_)
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+#X_train['Ticket_2'].hist()
 
 
 
