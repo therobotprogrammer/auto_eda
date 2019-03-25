@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn import preprocessing, neighbors
+from sklearn import preprocessing, neighbors, decomposition
 from sklearn.preprocessing import LabelEncoder
 import keras
 import math
@@ -1035,11 +1035,21 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
     #params_df = cv_results_['params']
     params_df = pd.DataFrame(cv_results_['params'])
     
-    column_names = params_df.columns
+    all_param_names = params_df.columns
     
-    if len(params_df.columns) == 2:     
-        x = params_df[column_names[0]]
-        y = params_df[column_names[1]]
+    all_param_names_excluding_base_estimator = []
+    
+    for name in all_param_names:
+        # if '__' is not found, then append list
+        if name.find('__') == -1:
+            all_param_names_excluding_base_estimator.append(name)
+    
+    #remove params for base estimators
+    
+    
+    if len(all_param_names_excluding_base_estimator) == 2:     
+        x = params_df[all_param_names_excluding_base_estimator[0]]
+        y = params_df[all_param_names_excluding_base_estimator[1]]
         
         train_scores_df = pd.DataFrame(cv_results_['mean_train_score'])
         train_scores = train_scores_df.iloc[:,0]
@@ -1058,8 +1068,8 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
             
             trace_test = go.Mesh3d(x=x,y=y,z=test_scores,
                        alphahull=3,
-                       opacity=.25,
-                       colorscale="Jet",
+                       opacity=.5,
+                       colorscale="Picnic",
                        intensity=test_scores,                        
                        )
             
@@ -1082,42 +1092,99 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
             traces = [trace_test]
                    
         plotly.offline.plot(traces)
+        
+        
+    else:
+        print('Cannot plot 3d plot. Number of params are: ', len(all_param_names_excluding_base_estimator))
+
+
+
+use_ada_boost = True
+if use_ada_boost:    
+    base_classifier = tree.DecisionTreeClassifier()
+    
+    ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
+    
+    # note: it is very important to specify max depth = 1 so only stumps are built. 
+    # if not then whole tree is built causing overfitting. 
+    
+    ada_boost_grid = {
+                        'base_estimator__max_depth' : [1], 
+                        'n_estimators': get_equally_spaced_numbers_in_range(1,5000) ,
+                        'learning_rate': get_equally_spaced_non_zero_floats_in_range(0,1,10) ,
+            }
+    
+    ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+    
+    
+    ada_boost_grid_estimator.fit(X_train, y_train)
+    
+    print('Best SCore: ', ada_boost_grid_estimator.best_score_)
+    print('Best Params: ', ada_boost_grid_estimator.best_params_)
+    
+    plot_3d(ada_boost_grid_estimator)
+    
+    results_ada_boost_grid_estimator = ada_boost_grid_estimator.cv_results_
 
 
 
 
-#base_classifier = tree.DecisionTreeClassifier()
-#
-#ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
-#
-#ada_boost_grid = {
-#                    'n_estimators': get_equally_spaced_numbers_in_range(1,5000) ,
-#                    'learning_rate': get_equally_spaced_non_zero_floats_in_range(0,1,10) ,
-#        }
-#
-#ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
-#
-#
-#ada_boost_grid_estimator.fit(X_train, y_train)
 
-print('Best SCore: ', ada_boost_grid_estimator.best_score_)
-print('Best Params: ', ada_boost_grid_estimator.best_params_)
-
-plot_3d(ada_boost_grid_estimator)
-
-results_ada_boost_grid_estimator = ada_boost_grid_estimator.cv_results_
+#####
+#gradient boost
+#stacking
+#voting
 
 
-#Best SCore:  0.8013468013468014
-#Best Params:  {'learning_rate': 0.7000000000000001, 'n_estimators': 4444}
-#
-#print('Best Params: ', ada_boost_grid_estimator.best_params_)
-#Best Params:  {'learning_rate': 0.7000000000000001, 'n_estimators': 4444}
+#####################
+#PCA
 
-#X_train['Ticket_2'].hist()
+def pca(df, target, axis = 8, show_graphs = True):
+    lpca = decomposition.PCA(n_components = axis)
+    
+    lpca.fit(df)
+    
+    
+    df_pca_new_axis = lpca.fit_transform(df)
+    df_pca_original_axis = lpca.inverse_transform(df_pca_new_axis)
+    
+    df_pca_new_axis_df = pd.DataFrame(df_pca_new_axis)
+    #df_pca_original_axis_df = pd.DataFrame(df_pca_new_axis)
+    
+    del(df_pca_new_axis)
+    del(df_pca_original_axis)
+    
+    lpca.explained_variance_ratio_
+    
+    plt.figure()
+    plt.plot(lpca.explained_variance_ratio_)
+    plt.ylabel('Variance Ratio')
+    plt.xlabel('PCA Axis')
+    plt.show()
+    
+    trace_pca = go.Scatter3d(
+        x=df_pca_new_axis_df[0],
+        y=df_pca_new_axis_df[1],
+        z=df_pca_new_axis_df[2],
+        mode='markers',
+        marker=dict(
+            size=12,
+                    # set color to an array/list of desired values
+            color=target,
+            colorscale='Viridis',   # choose a colorscale
+            opacity=0.8
+        )
+    )
+        
+    traces = [trace_pca]
+           
+    plotly.offline.plot(traces)
+
+    return df_pca_new_axis_df
 
 
 
+X_train = pca(X_train, y_train, show_graphs = True)
 
 
 
