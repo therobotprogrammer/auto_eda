@@ -39,11 +39,17 @@ import plotly.plotly as py
 import plotly.graph_objs as go
 
 
+from missingpy import KNNImputer, MissForest
+
+
+
 
 # ALL TO DO
 # try without using missing data
 
 auto_generated_data_df_dropped = pd.DataFrame()
+
+log_warnings = []
 
 
 #from sklearn_pandas import CategoricalImputer
@@ -199,14 +205,31 @@ def hash_it(text):
     return(hash_int)   
                                               
 
+def revert_nans_from_df(df, masks):
+    assert df.shape == masks.shape
+    
+    rows = masks.shape[0]
+    cols = masks.shape[1]
+    
+    for r in range(rows):
+        for c in range(cols):
+            if masks.iloc[r, c]:
+                df.iloc[r,c] = math.nan
+    return df 
+        
+    
 
 
-def cat_preprocess(df_original, strategy = 'seperate_unknown', ):    
+def label_encoder(df_original, strategy = 'keep_missing_as_nan'):    
     
     assert (min_data_in_column_percent >= 0 and min_data_in_column_percent <= 1), 'min_data_in_column_percent out of range 0 to 1'
         
     
     df = df_original.copy(deep = True)
+    
+    mask_df = pd.DataFrame(df.isnull().values)
+    
+#    mask_df.columns = df.columns
         
     sys_min = -sys.maxsize -1   
    
@@ -217,15 +240,16 @@ def cat_preprocess(df_original, strategy = 'seperate_unknown', ):
         
         if total_real_data_percentage < min_data_in_column_percent:
             auto_generated_data_df_dropped[column_name + '_failed_drop_threshold_percent_' + str(min_data_in_column_percent)] = df[column_name].copy(deep = True)
-            
             df.drop(columns = column_name, inplace = True)            
             
         else:    
-            series = df[column_name]
+            series = df[column_name]  
+           
+                              
             
-            if strategy == 'seperate_unknown':
+            if strategy == 'seperate_missing':
                 
-                if series.dtype.kind in 'biufc': 
+                if df[column_name] .dtype.kind in 'biufc': 
                     #convert NaN to number
                     series = series.replace(np.NaN, sys_min)
                 else:
@@ -233,27 +257,47 @@ def cat_preprocess(df_original, strategy = 'seperate_unknown', ):
             else:
                 ci = CategoricalImputer()
                 ci.fit(series)
-                series = ci.transform(series)   
+                series = ci.transform(series)  
+                
+#            elif strategy == 'keep_missing_as_nan':
+                
+            
                 
             # label encode. label encoder does not work directly on multiple columns so its in for loop    
             le = preprocessing.LabelEncoder()
             le.fit(series)
             series = le.transform(series)        
-            df[column_name] = series       
- 
-    
+            df[column_name] = series 
+
 #    ohe = preprocessing.OneHotEncoder(categories = 'auto')
 #    ohe.fit(df)
 #    df = ohe.transform(df).toarray()
 #    
 #    df = pd.get_dummies(df)
         
-    #one hot encoding    
-    df = pd.get_dummies(df, columns= df.columns )
+    #one hot encoding   
+
+
+
+
+    
+    if strategy == 'keep_missing_as_nan':
+        df = revert_nans_from_df(df, mask_df)
+
+    
+        
+#    processed_df = df_excluded_from_one_hot.join( df_one_hot, how = 'outer')
+
+        
+    
 
     return df
 
-
+def warn(w):
+    log_warnings.append(w)
+    print(w)
+    
+    
 
 
 def drop_and_log_column(df, column_name = None, reason = None):
@@ -643,7 +687,7 @@ for column in auto_generated_data_df.columns:
     
     
     column_str = '[' + column +']'    
-    if column == 'Cabin_0':
+    if column == 'Ticket_0':
         print('Found' )
 
     group_dict_lookup_dict[column] = group_dict
@@ -674,8 +718,9 @@ for column in auto_generated_data_df.columns:
 #                    auto_generated_data_df_categorical.loc[rows_to_discard, column] = np.nan   
                     
         #To Do: Figure out if this dropping is a good idea. Also add it to drop dataframe
-        if auto_generated_data_df_categorical[column].isnull().values.any():
-            auto_generated_data_df_categorical.drop(columns = [column])
+        if auto_generated_data_df_categorical[column].count() == 0:
+            drop_and_log_column(auto_generated_data_df_categorical, column, 'Zero Data')
+#            auto_generated_data_df_categorical.drop(columns = [column])
             print('dropped empty column:', column)
         ### To Do: Plot graphs later        
         if found_new_feature:
@@ -787,6 +832,87 @@ for column in auto_generated_hash_df.columns:
         pass  
                         
 
+def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_column_from_ohe):   
+    
+    
+    #label encode categorical
+    
+    categorical_df_label_encoded =  label_encoder(categorical_df, strategy = 'keep_missing_as_nan')
+    #here outer is used. so continuous
+    cat_columns = categorical_df_label_encoded.columns
+    cont_columns = continuous_df.columns
+    
+    joint_df = categorical_df_label_encoded.join( continuous_df, how = 'outer')      
+
+    #get indexes of categorical columns. this is used by miss_forest to identify categorical features
+    cat_column_indexes_in_joint_df = []    
+    for column in cat_columns:
+        cat_column_indexes_in_joint_df.append(joint_df.columns.get_loc(column))
+    
+    
+    cat_column_indexes_in_joint_df = np.asarray(cat_column_indexes_in_joint_df)
+    
+    
+    if imputer == 'random_forest':
+        print('Using random forest as imputer')
+        imp = MissForest(max_iter = 10, n_estimators = 1000, n_jobs = 24, verbose = 2)
+        imputed_df = imp.fit_transform(joint_df, cat_vars = cat_column_indexes_in_joint_df )
+        #imputation leads to loss of column information. this step restores column names and gives back dataframe
+        imputed_df = pd.DataFrame(imputed_df)
+        imputed_df.columns = joint_df.columns
+        
+    elif imputer == 'knn':
+        col_max_missing = 1        
+        if col_max_missing > min_data_in_column_percent:
+            warn('manual override: There were too many missing columns for knn imputation. col_max_missing = '+ str(col_max_missing * 100) + ' percent' + '   min_data_in_column_percent:' + str(min_data_in_column_percent))
+        
+        imp = KNNImputer(col_max_missing=col_max_missing)
+        imputed_df = imp.fit_transform(joint_df)    
+        imputed_df = pd.DataFrame(imputed_df)
+        imputed_df.columns = joint_df.columns
+    
+    if enable_ohe:
+        #the cat and cont are seperated and then joint so that the order is preserved after one hot
+        imputed_cat_df = imputed_df[list(cat_columns)]
+        imputed_cont_df = imputed_df[list(cont_columns)]
+        
+        
+        #one hot categorical columns    
+        imputed_cat_df = one_hot(imputed_cat_df, exclude_column_from_ohe)
+        
+        imputed_df = imputed_cat_df.join(imputed_cont_df,how = 'outer')
+
+    
+    
+    return imputed_df
+    
+
+def one_hot(df, exclude_from_ohe = []):
+    cat_columns = df.columns
+    
+    columns_to_one_hot = []
+    
+    df_excluded_from_one_hot = pd.DataFrame()
+    
+    df_after_one_hot = pd.DataFrame()
+
+    if len(exclude_from_ohe) == 0:
+        df_after_one_hot = pd.get_dummies(df, columns= columns_to_one_hot )
+    
+    else:         
+        for column_name in cat_columns:
+            if column_name in exclude_from_ohe:
+                df_excluded_from_one_hot[column_name] = df[column_name].copy(deep = True)
+                warn(column_name + ': excluded from one hot in cat_preprocess')          
+            else:
+                columns_to_one_hot.append(column_name)
+    
+        #perform one hot encoding    
+        if len(columns_to_one_hot) != 0 :
+            df_after_one_hot= pd.get_dummies(df, columns= columns_to_one_hot )
+           
+          
+    return df_after_one_hot
 
 combined_categorical_df = pd.DataFrame()
 combined_categorical_df = combined_categorical_df.join(train_categorical,how = 'outer')
@@ -794,12 +920,18 @@ combined_categorical_df = combined_categorical_df.join(auto_generated_data_df_ca
 combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
 
 
-combined_categorical_preprocessed_df = cat_preprocess(combined_categorical_df)
 
 
 combined_continuous_df = pd.DataFrame()
 combined_continuous_df = combined_continuous_df.join(train_continuous,how = 'outer')
 combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_continuous,how = 'outer')
+
+exclude_from_ohe = ['Pclass', 'SibSp', 'Parch' ]
+
+X_train = pre_processing(combined_categorical_df, combined_continuous_df, imputer = 'random_forest', enable_ohe = True, exclude_column_from_ohe = exclude_from_ohe)
+
+
+#combined_categorical_preprocessed_df = cat_preprocess(combined_categorical_df, exclude_from_ohe = exclude_from_ohe)
 
 
 #def cast_cont_to_cat(df, features):
@@ -821,24 +953,15 @@ combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_cont
 #else:
     
 
-combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df, missing_data_drop_threshold = .5, si_strategy = 'constant', si_fill_value = -123456)
+#combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df, missing_data_drop_threshold = .5, si_strategy = 'constant', si_fill_value = -123456)
     
 
 
 #drop columns
 # passenger id is dropped as it uniquely identifies the row. This causes overfitting when a lot of trees are used. The model
 # remembers the passenger id and result
-manually_dropped_columns = pd.DataFrame()
-columns_to_drop = ['PassengerId']
-manually_dropped_columns[columns_to_drop] = combined_continuous_preprocessed_df[columns_to_drop].copy(deep=True)
-combined_continuous_preprocessed_df = combined_continuous_preprocessed_df.drop(columns = columns_to_drop)
 
-combined_continuous_preprocessed_df.columns
-
-
-X_train = pd.DataFrame()
-X_train = X_train.join(combined_categorical_preprocessed_df,how = 'outer')
-X_train = X_train.join(combined_continuous_preprocessed_df,how = 'outer')
+drop_and_log_column(X_train, 'PassengerId', 'manually dropped - unique identifier')
 #
 #
 #tree
@@ -967,7 +1090,8 @@ if use_bag_knn:
     
     bag_knn_grid_estimator.fit(X_train, y_train)
 
-
+    print('Best SCore: ', bag_knn_grid_estimator.best_score_)
+    print('Best Params: ', bag_knn_grid_estimator.best_params_)
 
 
 
@@ -1085,7 +1209,7 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
                     size=12,
                     color=test_scores,                # set color to an array/list of desired values
                     colorscale='Viridis',   # choose a colorscale
-                    opacity=0.8
+                    opacity=0.5
                 )
             )
                 
@@ -1099,7 +1223,7 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
 
 
 
-use_ada_boost = True
+use_ada_boost = False
 if use_ada_boost:    
     base_classifier = tree.DecisionTreeClassifier()
     
@@ -1110,8 +1234,8 @@ if use_ada_boost:
     
     ada_boost_grid = {
                         'base_estimator__max_depth' : [1], 
-                        'n_estimators': get_equally_spaced_numbers_in_range(1,5000) ,
-                        'learning_rate': get_equally_spaced_non_zero_floats_in_range(0,1,10) ,
+                        'n_estimators': get_equally_spaced_numbers_in_range(1,50,30) ,
+                        'learning_rate': get_equally_spaced_non_zero_floats_in_range(0,.7,30) ,
             }
     
     ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
@@ -1184,7 +1308,7 @@ def pca(df, target, axis = 8, show_graphs = True):
 
 
 
-X_train = pca(X_train, y_train, show_graphs = True)
+X_train_pca = pca(X_train, y_train, show_graphs = True)
 
 
 
