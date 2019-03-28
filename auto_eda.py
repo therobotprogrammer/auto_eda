@@ -52,7 +52,7 @@ from missingpy import KNNImputer, MissForest
 
 auto_generated_data_df_dropped = pd.DataFrame()
 
-log_warnings = []
+log_warnings = set()
 
 
 #from sklearn_pandas import CategoricalImputer
@@ -82,13 +82,15 @@ min_members_in_a_group = 5
 auto_min_entries_in_continous_column = 10
 hashing_dimention = 256
 min_data_in_column_percent = 0 #percent of nan . To Do: This should also be applied to continuous
+hashing_strategy = 'ascii'
 
 #to do: hash char as a to z and int as a range
 #to do: for things that are hashed, use box plot etc
 
 target_column = 'Survived'
 
-y_train = pd.Series()
+y_train = train[target_column]
+
 
 def is_valid(text_str):
     if (text_str == np.nan) or (text_str == None) or (text_str == 'nan') or (text_str == ''):
@@ -193,6 +195,10 @@ def split_at_char_int_transistion(text_str):
 
 
 def hash_function_first_char(s):
+    if not type(s) == str:
+        s = str(s)
+        warn('hash_function_first_char - converted int to string. possible loss of information')
+        
     #convert to lower case
     s_lower = s.lower()
     
@@ -200,18 +206,15 @@ def hash_function_first_char(s):
     
     
 
-def hash_it(text, hashing_strategy = 'ascii_0'):
+def hash_it(text, hashing_strategy = 'ascii'):
     
     if hashing_strategy == 'md5':
         hash_function = 'md5'
-        n = 2
-    elif hashing_strategy == 'ascii_0':
+        n = hashing_dimention
+    elif hashing_strategy == 'ascii':
         hash_function = hash_function_first_char
         n = 256
-    else:
-        hash_function = hash_function_first_char
-        n = 256
-    
+   
         
     if (text == np.nan) or (text == None) or (text == 'nan') or type(text) == type(np.nan) :
        return np.nan
@@ -316,8 +319,8 @@ def label_encoder(df_original, strategy = 'keep_missing_as_nan'):
 
     return df
 
-def warn(w):
-    log_warnings.append(w)
+def warn(w):       
+    log_warnings.add(w)
     print(w)
     
     
@@ -462,6 +465,7 @@ def get_equally_spaced_non_zero_floats_in_range(start = 0, stop =1, total_number
 
 
 
+#to do: only categorical and unresolved seem to be used. delete extra entries. or have continuous entry
 
 column_properties_df = pd.DataFrame(columns = ['categorical', 'text', 'unresolved', 'incomplete', 'imputed', 'error'])
 
@@ -471,6 +475,8 @@ train_continuous = pd.DataFrame()
 
 for idx, column in enumerate(train.columns):
     print()
+    if column == 'nationality':
+        print('')
     try:
         #column_properties_df.loc[column, 'Index'] = column
         column_properties_df.loc[column, 'error'] = False
@@ -496,25 +502,26 @@ for idx, column in enumerate(train.columns):
                      
             #try to convert data to numeric if possible
             try:
-                temp_column = pd.to_numeric(train[column])                
+                temp_column = pd.to_numeric(train[column])               
+                     
+                if column != target_column:
+                    if show_plots:
+                        print(log_column_str, 'vs target ', log_target_str)
+                        plt.figure()
+                        sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
+                        plt.show()
+    #                sns.factorplot(x="Embarked", hue="Survived", data=titanic_train, kind="count", height=6)
+                    train_categorical[column] = temp_column                
+
+                    
             except Exception:
-                temp_column = train[column]
-                pass            
-        
-                        
-            if column != target_column:
-                if show_plots:
-                    print(log_column_str, 'vs target ', log_target_str)
-                    plt.figure()
-                    sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
-                    plt.show()
-#                sns.factorplot(x="Embarked", hue="Survived", data=titanic_train, kind="count", height=6)
-                train_categorical[column] = temp_column
                 
-                
-            else:
-                y_train = temp_column        
-                
+                column_properties_df.loc[column, 'unresolved'] = True
+                pass     
+                    
+#                else:
+#                    y_train = temp_column                  
+#                
                 
         else:    
             if train[column].dtypes != 'O' and column != target_column:        
@@ -782,7 +789,7 @@ for column in auto_generated_data_df.columns:
                 auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(str)
                 
                 #by this point, it is a string and not an int. so we use the first letter as hash function
-                auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(hash_it, hashing_strategy = 'md5')   
+                auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(hash_it, hashing_strategy)   
                 
                 
                 
@@ -880,7 +887,7 @@ def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_c
     
     if imputer == 'random_forest':
         print('Using random forest as imputer')
-        imp = MissForest(max_iter = 20, n_estimators = 1000, n_jobs = 24, verbose = 0)
+        imp = MissForest(max_iter = 10, n_estimators = 1000, n_jobs = 24, verbose = 0)
         imputed_df = imp.fit_transform(joint_df, cat_vars = cat_column_indexes_in_joint_df )
         #imputation leads to loss of column information. this step restores column names and gives back dataframe
         imputed_df = pd.DataFrame(imputed_df)
@@ -1259,9 +1266,15 @@ if use_ada_boost:
     
     ada_boost_grid = {
                         'base_estimator__max_depth' : [1], 
-                        'n_estimators': get_equally_spaced_numbers_in_range(1,10000,30) ,
-                        'learning_rate': get_equally_spaced_non_zero_floats_in_range(0,1,40) ,
+                        'n_estimators': get_equally_spaced_numbers_in_range(1,50,50) ,
+                        'learning_rate': get_equally_spaced_non_zero_floats_in_range(.10,.50,40) ,
             }
+
+#    ada_boost_grid = {
+#                        'base_estimator__max_depth' : [1], 
+#                        'n_estimators':[31],
+#                        'learning_rate': [.35] ,
+#            }
     
     ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
     
@@ -1333,7 +1346,7 @@ def pca(df, target, axis = 8, show_graphs = True):
 
 
 
-X_train_pca = pca(X_train, y_train, show_graphs = True)
+#X_train = pca(X_train, y_train, show_graphs = True)
 
 
 
