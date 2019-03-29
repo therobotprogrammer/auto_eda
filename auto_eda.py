@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn import preprocessing, neighbors, decomposition
+from sklearn import preprocessing, neighbors, decomposition, manifold
 from sklearn.preprocessing import LabelEncoder
 import keras
 import math
@@ -50,6 +50,9 @@ from missingpy import KNNImputer, MissForest
 # to do: change hash function as md5 data to be hashed randomly. As a result the rf imputer throws it.  
 
 
+
+
+
 auto_generated_data_df_dropped = pd.DataFrame()
 
 log_warnings = set()
@@ -80,9 +83,19 @@ max_groups_in_categorical_data = 50
 min_members_in_a_group = 5
 
 auto_min_entries_in_continous_column = 10
-hashing_dimention = 256
+hashing_dimention = 2
 min_data_in_column_percent = 0 #percent of nan . To Do: This should also be applied to continuous
-hashing_strategy = 'ascii'
+hashing_strategy = 'md5'
+
+
+
+
+use_cuda_tsne = True
+if use_cuda_tsne:    
+    from tsnecuda import TSNE
+
+
+
 
 #to do: hash char as a to z and int as a range
 #to do: for things that are hashed, use box plot etc
@@ -206,12 +219,12 @@ def hash_function_first_char(s):
     
     
 
-def hash_it(text, hashing_strategy = 'ascii'):
+def hash_it(text, strategy):
     
-    if hashing_strategy == 'md5':
+    if strategy == 'md5':
         hash_function = 'md5'
         n = hashing_dimention
-    elif hashing_strategy == 'ascii':
+    elif strategy == 'ascii':
         hash_function = hash_function_first_char
         n = 256
    
@@ -789,7 +802,7 @@ for column in auto_generated_data_df.columns:
                 auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(str)
                 
                 #by this point, it is a string and not an int. so we use the first letter as hash function
-                auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(hash_it, hashing_strategy)   
+                auto_generated_hash_df[column] = auto_generated_hash_df[column].apply(hash_it, strategy = hashing_strategy)   
                 
                 
                 
@@ -994,6 +1007,14 @@ X_train = pre_processing(combined_categorical_df, combined_continuous_df, impute
 # remembers the passenger id and result
 
 drop_and_log_column(X_train, 'PassengerId', 'manually dropped - unique identifier')
+
+
+X_train_backup = X_train.copy(deep = True)
+
+
+
+
+
 #
 #
 #tree
@@ -1255,7 +1276,9 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
 
 
 
-use_ada_boost = True
+
+
+use_ada_boost = False
 if use_ada_boost:    
     base_classifier = tree.DecisionTreeClassifier()
     
@@ -1266,8 +1289,8 @@ if use_ada_boost:
     
     ada_boost_grid = {
                         'base_estimator__max_depth' : [1], 
-                        'n_estimators': get_equally_spaced_numbers_in_range(1,50,50) ,
-                        'learning_rate': get_equally_spaced_non_zero_floats_in_range(.10,.50,40) ,
+                        'n_estimators': get_equally_spaced_numbers_in_range(1,50,20) ,
+                        'learning_rate': get_equally_spaced_non_zero_floats_in_range(.10,.7,40) ,
             }
 
 #    ada_boost_grid = {
@@ -1300,73 +1323,113 @@ if use_ada_boost:
 
 #####################
 #PCA
-
-def pca(df, target, axis = 8, show_graphs = True):
-    lpca = decomposition.PCA(n_components = axis)
     
-    lpca.fit(df)
-    
-    
-    df_pca_new_axis = lpca.fit_transform(df)
-    df_pca_original_axis = lpca.inverse_transform(df_pca_new_axis)
-    
-    df_pca_new_axis_df = pd.DataFrame(df_pca_new_axis)
-    #df_pca_original_axis_df = pd.DataFrame(df_pca_new_axis)
-    
-    del(df_pca_new_axis)
-    del(df_pca_original_axis)
-    
-    lpca.explained_variance_ratio_
-    
-    plt.figure()
-    plt.plot(lpca.explained_variance_ratio_)
-    plt.ylabel('Variance Ratio')
-    plt.xlabel('PCA Axis')
-    plt.show()
-    
-    trace_pca = go.Scatter3d(
-        x=df_pca_new_axis_df[0],
-        y=df_pca_new_axis_df[1],
-        z=df_pca_new_axis_df[2],
+def plot3d(x,y,z, color='rgb(204, 204, 204)'):
+    trace = go.Scatter3d(
+        x = x,
+        y = y,
+        z = z,
         mode='markers',
         marker=dict(
             size=12,
                     # set color to an array/list of desired values
-            color=target,
+            color=color,
             colorscale='Viridis',   # choose a colorscale
             opacity=0.8
         )
     )
         
-    traces = [trace_pca]
+    traces = [trace]
            
     plotly.offline.plot(traces)
+    
 
-    return df_pca_new_axis_df
+def plot2d(x,y,color = 'rgb(255, 215, 0)'):
+    trace1 = go.Scatter(
+        x = x,    
+        y = y,
+        mode='markers',
+        marker=dict(
+            size=16,
+            color = color, #set color equal to a variable
+            colorscale='Viridis',
+            showscale=True
+        )
+    )
+    traces = [trace1]          
+    plotly.offline.plot(traces)
+
+def reduce_dimentions(df, target, algorithm = 'tsne', axis = 8, show_graphs = True, perplexity = 15):
+    
+    if algorithm == 'pca':   
+        lpca = decomposition.PCA(n_components = axis)
+        
+        lpca.fit(df)       
+        
+        reduced_dimention_np_arr = lpca.fit_transform(df)
+#        df_original_axis = lpca.inverse_transform(reduced_dimention_np_arr)
+        
+        reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)
+        #df_pca_original_axis_df = pd.DataFrame(df_new_axis)
+        
+#        lpca.explained_variance_ratio_
+        
+        plt.figure()
+        plt.plot(lpca.explained_variance_ratio_)
+        plt.ylabel('Variance Ratio')
+        plt.xlabel('PCA Axis')
+        plt.show()
+        
+        del(df_pca_new_axis)
+        del(df_pca_original_axis)
+        
+        x=reduced_dimention_df[0]
+        y=reduced_dimention_df[1]
+        z=reduced_dimention_df[2]
+        color = y_train
+        plot3d(x,y,z,color)
+    
+
+            
+    elif algorithm == 'cuda_tsne':
+        
+        reduced_dimention_np_arr = TSNE(n_components=2,perplexity=perplexity, verbose=1).fit_transform(X_train)
+        reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)
+        
+        x=reduced_dimention_df[0]
+        y=reduced_dimention_df[1]
+        
+        color = y_train
+        plot2d(x,y,color)
+            
+        
+    else:
+        tsne = manifold.TSNE(n_components = 3, perplexity = perplexity)
+        reduced_dimention_np_arr = tsne.fit_transform(X = X_train)   
+        reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)
+        
+        x=reduced_dimention_df[0]
+        y=reduced_dimention_df[1]
+        z=reduced_dimention_df[2]
+        color = y_train
+        plot3d(x,y,z,color)
+
+    return reduced_dimention_df
 
 
+X_train = X_train_backup.copy(deep = True)
+#
+scaler = preprocessing.StandardScaler()
+X_train = scaler.fit_transform(X_train[X_train.columns])
+X_train = pd.DataFrame(X_train)
 
-#X_train = pca(X_train, y_train, show_graphs = True)
-
-
-
-
-
-
-
-
-
-
+#
+#here reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
+X_train_reduced_dimentions = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', perplexity = 100, show_graphs = True)
+X_train = X_train_reduced_dimentions
 
 
-
-
-
-
-
-
-
-
+#to do: ensure data is scaled
 
 
 
