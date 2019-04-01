@@ -88,7 +88,22 @@ min_data_in_column_percent = 0 #percent of nan . To Do: This should also be appl
 hashing_strategy = 'md5'
 
 
+class estimator:
+    name = ''
+    estimator = None
+    X_fit_transformed = pd.DataFrame()    
+    best_estimator = None
+    traces = None   
+    best_score = None
+    best_params = None  
 
+
+class dataset:    
+    history = []
+    X_train = pd.DataFrame()
+    
+estimators_dict = {}
+X_train_dict = {}
 
 use_cuda_tsne = True
 if use_cuda_tsne:    
@@ -1009,8 +1024,7 @@ X_train = pre_processing(combined_categorical_df, combined_continuous_df, impute
 drop_and_log_column(X_train, 'PassengerId', 'manually dropped - unique identifier')
 
 
-X_train_backup = X_train.copy(deep = True)
-
+X_train_dict['original'] = X_train.copy(deep = True)
 
 
 
@@ -1274,43 +1288,55 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
     else:
         print('Cannot plot 3d plot. Number of params are: ', len(all_param_names_excluding_base_estimator))
 
+    return traces
 
 
 
+def ada_boost(X_train, y_train, message = ''):
+        base_classifier = tree.DecisionTreeClassifier()
+        
+        ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
+        
+        # note: it is very important to specify max depth = 1 so only stumps are built. 
+        # if not then whole tree is built causing overfitting. 
+        
+        ada_boost_grid = {
+                            'base_estimator__max_depth' : [1], 
+                            'n_estimators': get_equally_spaced_numbers_in_range(1,50,20) ,
+                            'learning_rate': get_equally_spaced_non_zero_floats_in_range(.10,.7,40) ,
+                }
+    
+    #    ada_boost_grid = {
+    #                        'base_estimator__max_depth' : [1], 
+    #                        'n_estimators':[31],
+    #                        'learning_rate': [.35] ,
+    #            }
+        
+        ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+        
+        
+        ada_boost_grid_estimator.fit(X_train, y_train)
+        
+        print('Best SCore: ', ada_boost_grid_estimator.best_score_)
+        print('Best Params: ', ada_boost_grid_estimator.best_params_)
+        
+        traces = plot_3d(ada_boost_grid_estimator)
+        
+        results_ada_boost_grid_estimator = ada_boost_grid_estimator.cv_results_
 
-use_ada_boost = False
-if use_ada_boost:    
-    base_classifier = tree.DecisionTreeClassifier()
-    
-    ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
-    
-    # note: it is very important to specify max depth = 1 so only stumps are built. 
-    # if not then whole tree is built causing overfitting. 
-    
-    ada_boost_grid = {
-                        'base_estimator__max_depth' : [1], 
-                        'n_estimators': get_equally_spaced_numbers_in_range(1,50,20) ,
-                        'learning_rate': get_equally_spaced_non_zero_floats_in_range(.10,.7,40) ,
-            }
-
-#    ada_boost_grid = {
-#                        'base_estimator__max_depth' : [1], 
-#                        'n_estimators':[31],
-#                        'learning_rate': [.35] ,
-#            }
-    
-    ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
-    
-    
-    ada_boost_grid_estimator.fit(X_train, y_train)
-    
-    print('Best SCore: ', ada_boost_grid_estimator.best_score_)
-    print('Best Params: ', ada_boost_grid_estimator.best_params_)
-    
-    plot_3d(ada_boost_grid_estimator)
-    
-    results_ada_boost_grid_estimator = ada_boost_grid_estimator.cv_results_
-
+        name = 'ada_boost' + message        
+        est = estimator()
+        est.name = name
+        est.estimator = ada_boost_grid_estimator
+        est.best_estimator = ada_boost_grid_estimator.best_estimator_
+        est.traces = traces
+        est.best_score = ada_boost_grid_estimator.best_score_
+        est.best_params = ada_boost_grid_estimator.best_params_  
+       
+        
+        estimators_dict[name] = est
+        
+        return results_ada_boost_grid_estimator
 
 
 
@@ -1342,7 +1368,7 @@ def plot3d(x,y,z, color='rgb(204, 204, 204)'):
     traces = [trace]
            
     plotly.offline.plot(traces)
-    
+    return traces
 
 def plot2d(x,y,color = 'rgb(255, 215, 0)'):
     trace1 = go.Scatter(
@@ -1358,6 +1384,7 @@ def plot2d(x,y,color = 'rgb(255, 215, 0)'):
     )
     traces = [trace1]          
     plotly.offline.plot(traces)
+    return traces
 
 def reduce_dimentions(df, target, algorithm = 'tsne', axis = 8, show_graphs = True, perplexity = 15):
     
@@ -1380,8 +1407,6 @@ def reduce_dimentions(df, target, algorithm = 'tsne', axis = 8, show_graphs = Tr
         plt.xlabel('PCA Axis')
         plt.show()
         
-        del(df_pca_new_axis)
-        del(df_pca_original_axis)
         
         x=reduced_dimention_df[0]
         y=reduced_dimention_df[1]
@@ -1417,16 +1442,50 @@ def reduce_dimentions(df, target, algorithm = 'tsne', axis = 8, show_graphs = Tr
     return reduced_dimention_df
 
 
-X_train = X_train_backup.copy(deep = True)
-#
-scaler = preprocessing.StandardScaler()
-X_train = scaler.fit_transform(X_train[X_train.columns])
-X_train = pd.DataFrame(X_train)
+
+def standard_scaler(X_train):
+    scaler = preprocessing.StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train[X_train.columns])
+    X_train_scaled = pd.DataFrame(X_train)    
+           
+    return X_train_scaled
+
 
 #
-#here reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
-X_train_reduced_dimentions = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', perplexity = 100, show_graphs = True)
-X_train = X_train_reduced_dimentions
+#where reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
+message = 'scaled'
+X_train = X_train_dict['original'].copy(deep = True)
+X_train_dict[message] = standard_scaler(X_train)
+
+
+message = 'reduced_dims_on_scaled_pca'
+X_train = X_train_dict['scaled'].copy(deep = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', perplexity = 100, show_graphs = True)
+X_train_dict[message] = X_train
+
+
+message = 'reduced_dims_on_scaled_tsne'
+X_train = X_train_dict['scaled'].copy(deep = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', perplexity = 15, show_graphs = True)
+X_train_dict[message] = X_train
+
+
+message = 'reduced_dims_on_unscaled_tsne'
+X_train = X_train_dict['original'].copy(deep = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', show_graphs = True)
+X_train_dict[message] = X_train
+
+
+
+
+#X_train_dict['reduced_dims_on_unscaled_tsne'].equals(X_train_dict['reduced_dims_on_scaled_tsne'])
+
+ada_boost_estimator_on_reduced_dims = ada_boost(X_train_dict['scaled'], y_train)
+
+
+ada_boost_estimator_on_reduced_dims = ada_boost(X_train, y_train, 'scaled')
+
+
 
 
 #to do: ensure data is scaled
