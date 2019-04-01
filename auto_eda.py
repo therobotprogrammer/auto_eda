@@ -1386,10 +1386,10 @@ def plot2d(x,y,color = 'rgb(255, 215, 0)'):
     plotly.offline.plot(traces)
     return traces
 
-def reduce_dimentions(df, target, algorithm = 'tsne', axis = 8, show_graphs = True, perplexity = 15):
+def reduce_dimentions(df, target, algorithm , n_components = 3, perplexity = 30, show_graphs = True):
     
     if algorithm == 'pca':   
-        lpca = decomposition.PCA(n_components = axis)
+        lpca = decomposition.PCA(n_components = n_components)
         
         lpca.fit(df)       
         
@@ -1418,7 +1418,7 @@ def reduce_dimentions(df, target, algorithm = 'tsne', axis = 8, show_graphs = Tr
             
     elif algorithm == 'cuda_tsne':
         
-        reduced_dimention_np_arr = TSNE(n_components=2,perplexity=perplexity, verbose=1).fit_transform(X_train)
+        reduced_dimention_np_arr = TSNE(n_components=n_components, perplexity=perplexity, verbose=1).fit_transform(X_train)
         reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)
         
         x=reduced_dimention_df[0]
@@ -1446,18 +1446,19 @@ def reduce_dimentions(df, target, algorithm = 'tsne', axis = 8, show_graphs = Tr
 def standard_scaler(X_train):
     scaler = preprocessing.StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train[X_train.columns])
-    X_train_scaled = pd.DataFrame(X_train)    
+    X_train_scaled = pd.DataFrame(X_train_scaled)    
            
     return X_train_scaled
 
 
-#
-#where reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
+
+
 message = 'scaled'
 X_train = X_train_dict['original'].copy(deep = True)
 X_train_dict[message] = standard_scaler(X_train)
 
 
+#where reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
 message = 'reduced_dims_on_scaled_pca'
 X_train = X_train_dict['scaled'].copy(deep = True)
 X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', perplexity = 100, show_graphs = True)
@@ -1466,25 +1467,27 @@ X_train_dict[message] = X_train
 
 message = 'reduced_dims_on_scaled_tsne'
 X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', perplexity = 15, show_graphs = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', perplexity = 100, show_graphs = True)
 X_train_dict[message] = X_train
 
 
 message = 'reduced_dims_on_unscaled_tsne'
 X_train = X_train_dict['original'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', show_graphs = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', perplexity = 100, show_graphs = True)
 X_train_dict[message] = X_train
+
+
 
 
 
 
 #X_train_dict['reduced_dims_on_unscaled_tsne'].equals(X_train_dict['reduced_dims_on_scaled_tsne'])
 
-ada_boost_estimator_on_reduced_dims = ada_boost(X_train_dict['scaled'], y_train)
-
-
-ada_boost_estimator_on_reduced_dims = ada_boost(X_train, y_train, 'scaled')
-
+#ada_boost_estimator_on_reduced_dims = ada_boost(X_train_dict['scaled'], y_train)
+#
+#
+#ada_boost_estimator_on_reduced_dims = ada_boost(X_train, y_train, 'scaled')
+#
 
 
 
