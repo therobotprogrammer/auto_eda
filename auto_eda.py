@@ -42,6 +42,41 @@ from missingpy import KNNImputer, MissForest
 
 
 
+global_problem_type = 'regression'
+
+    
+
+if global_problem_type == 'categorical':
+    directory = '/home/pt/Documents/auto_eda/categorical' 
+    file_path = os.path.join(directory, 'train.csv')
+    train = pd.read_csv(file_path, index_col = False)
+    
+
+    file_path = os.path.join(directory, 'pass_nationalities.csv')
+    name_prism = pd.read_csv(file_path, index_col = False)
+    name_prism_train = name_prism[:train.shape[0]]
+    train['nationality'] = name_prism_train['Nationality']
+    
+    
+    target_column = 'Survived'
+#    train.drop[]
+    
+    
+else:
+    directory = '/home/pt/Documents/auto_eda/regression'   
+    
+    file_path = os.path.join(directory, 'train.csv')
+    train = pd.read_csv(file_path, index_col = False)
+    target_column = 'SalePrice'
+    
+    
+results_dir = os.path.join(directory + '/results')    
+
+y_train = train[target_column].copy(deep = True)    
+
+target_df = train[target_column].copy(deep = True)
+
+
 ##############################################
 # ALL TO DO
 # try without using missing data
@@ -61,16 +96,9 @@ log_warnings = set()
 
 ### To Do: Convert comma to space
 
-directory = '/home/pt/Documents/auto_eda'
 
-file_path = os.path.join(directory, 'train.csv')
-train = pd.read_csv(file_path, index_col = False)
+   
 
-file_path = os.path.join(directory, 'pass_nationalities.csv')
-name_prism = pd.read_csv(file_path, index_col = False)
-name_prism_train = name_prism[:train.shape[0]]
-
-train['nationality'] = name_prism_train['Nationality']
 
 show_plots = True
 
@@ -114,9 +142,7 @@ if use_cuda_tsne:
 #to do: hash char as a to z and int as a range
 #to do: for things that are hashed, use box plot etc
 
-target_column = 'Survived'
 
-y_train = train[target_column]
 
 
 def is_valid(text_str):
@@ -500,10 +526,105 @@ train_categorical = pd.DataFrame()
 train_continuous = pd.DataFrame()
  
 
+class plotter:
+
+    def plot_cat_cat(x,y):            
+        message = 'Plotter cat-cat' + x.name + 'vs target '+ y.name
+        print(message)
+        
+        plt.figure()
+        ax = sns.catplot(x= x, hue = y, kind = 'count', height=6)        
+        
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+        plt.tight_layout()
+        
+
+        file_name = os.path.join(results_dir + '/' + message + '.svg')
+        plt.savefig(file_name)
+        
+        plt.show()
+    
+        
+    def plot_cat_cont(x,y, kde = True):
+        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
+        print(message)
+        plt.figure()
+        
+        temp_df = pd.DataFrame()        
+        temp_df[x.name] = x
+        temp_df[y.name] = y
+        
+        sns.FacetGrid(temp_df, hue = y.name, height=6).map(sns.kdeplot, y.name , vertical = False).add_legend()  
+
+#        sns.FacetGrid(x, hue = y, height=6).map(sns.kdeplot, x).add_legend() 
+
+      
+        plt.tight_layout()
+        
+        file_name = os.path.join(results_dir + '/' + message + '.svg')
+        plt.savefig(file_name)
+        
+        plt.show()
+        
+    
+    
+    def plot_cont_cont(x,y):
+        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
+        print(message)
+        plt.figure()
+#        sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()          
+        ax = sns.scatterplot(x = x, y = y, hue = y)
+        
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+        plt.tight_layout()
+        
+        file_name = os.path.join(results_dir + '/' + message + '.svg')
+        plt.savefig(file_name)
+        
+        plt.show()
+
+    def plot_cont_cat(x,y):
+        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
+        print(message)
+        plt.figure()      
+        
+        #To Do: resolve this workaround or use plotly. Facetgrid.map doesnt work without this
+        temp_df = pd.DataFrame()
+        
+        temp_df[x.name] = x
+        temp_df[y.name] = y
+        
+#        sns.FacetGrid(x, hue = x, height=6).map(sns.kdeplot, y, vertical = False).add_legend()  
+        sns.FacetGrid(temp_df, hue = x.name, height=6).map(sns.kdeplot, y.name , vertical = False).add_legend()  
+
+        
+        
+#        sns.FacetGrid(data_df, hue = x, height=6).map(sns.kdeplot, y).add_legend()  
+        
+        plt.tight_layout()        
+        file_name = os.path.join(results_dir + '/' + message + '.svg')
+        plt.savefig(file_name)
+        
+        plt.show()
+
+#plotter.plot_cont_cont(x=train['MSSubClass'], y=y_train)
+#
+##train = train.drop(columns = target_column)
+#plotter.plot_cont_cat(x=train['SaleType'], y=y_train)
+#
+#train[train.index.duplicated()]
+
+
 for idx, column in enumerate(train.columns):
     print()
-    if column == 'nationality':
-        print('')
+    
+
+    if column == 'SaleCondition':
+        print('debug message')
+        
+    if column == target_column:
+        continue
+        
     try:
         #column_properties_df.loc[column, 'Index'] = column
         column_properties_df.loc[column, 'error'] = False
@@ -533,10 +654,18 @@ for idx, column in enumerate(train.columns):
                      
                 if column != target_column:
                     if show_plots:
-                        print(log_column_str, 'vs target ', log_target_str)
-                        plt.figure()
-                        sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
-                        plt.show()
+#                        print(log_column_str, 'vs target ', log_target_str)
+#                        plt.figure()
+#                        sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
+#                        plt.show()
+                        if global_problem_type == 'categorical':
+                            plotter.plot_cat_cat(x=train[column] , y = y_train)  
+                            
+                        elif global_problem_type == 'regression':
+                            plotter.plot_cont_cat(x = train[column] , y  = y_train)  
+                        else:
+                            raise Exception('target is neither categorical nor regression')
+                            
     #                sns.factorplot(x="Embarked", hue="Survived", data=titanic_train, kind="count", height=6)
                     train_categorical[column] = temp_column                
 
@@ -544,6 +673,7 @@ for idx, column in enumerate(train.columns):
             except Exception:
                 
                 column_properties_df.loc[column, 'unresolved'] = True
+                print(log_column_str + 'is alphanumeric. Added for auto processing')
                 pass     
                     
 #                else:
@@ -554,16 +684,28 @@ for idx, column in enumerate(train.columns):
             if train[column].dtypes != 'O' and column != target_column:        
                 try:
                         if show_plots:
-                            plt.figure()
-                            sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()  
-                            plt.show()
+#                            plt.figure()
+#                            sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()  
+#                            plt.show()
+                            
+#                            plotter.plot_cat_cont(train, column , target_column)
+                            if global_problem_type == 'categorical':
+                                plotter.plot_cat_cont(x = train[column] , y  = y_train) 
+                                
+                            elif global_problem_type == 'regression':
+                                plotter.plot_cont_cont(x = train[column] , y  = y_train) 
+                            else:
+                                raise Exception('target is neither categorical nor regression')
+                            
+                            
+                            
                         column_properties_df.loc[column, 'categorical'] = False
                         
                         train_continuous[column] = train[column]
 
 
                 except:
-                        print('Log: >>>>> Unknown error: Cannot make graph for column: ', column)
+                        warn('Log: >>>>> Unknown error: Cannot make graph for column: ' + column)
                         column_properties_df.loc[column, 'error'] = True
 
             else:
@@ -576,13 +718,26 @@ for idx, column in enumerate(train.columns):
             
 #print('Log: ' , unresolved_columns, 'Could not be resolved as they were continous and of type object. These will be taken as string')       
 plt.show()
-
-
-
 print()
 print()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 print('Cleaning text in unresolved columns')
-
 
 
 column_split_mapper_dict = {}
@@ -591,6 +746,10 @@ column_split_mapper_dict = {}
 # Clean text columns
 auto_generated_data_df = pd.DataFrame()
 for index, row in column_properties_df.iterrows():
+ 
+    if index == 'SalePrice':
+        print('debug found')
+        
     list_of_autogenerated_df = []
     
     column_name_in_train_df = index
@@ -780,13 +939,22 @@ for column in auto_generated_data_df.columns:
 #            auto_generated_data_df_categorical.drop(columns = [column])
             print('dropped empty column:', column)
         ### To Do: Plot graphs later        
-        if found_new_feature:
-            if show_plots:                
-                plt.figure()
-                ax = sns.countplot(auto_generated_data_df_categorical[column], hue = train[target_column])
-                ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-                plt.tight_layout()
-                plt.show()
+        if found_new_feature:            
+            if show_plots: 
+                if global_problem_type == 'categorical':
+                    plotter.plot_cat_cat( x = auto_generated_data_df[column] , y =  y_train )
+                    
+                elif global_problem_type == 'regression':  
+                    plotter.plot_cont_cat( x = auto_generated_data_df[column] , y =  y_train )
+                    
+                else:
+                    raise Exception('target is neither categorical nor regression')
+                    
+#                plt.figure()
+#                ax = sns.countplot(auto_generated_data_df_categorical[column], hue = train[target_column])
+#                ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+#                plt.tight_layout()
+#                plt.show()
             print()
             print()
             print()
@@ -862,12 +1030,25 @@ for column in auto_generated_data_df_continuous.columns:
     
     try:
         auto_generated_data_df_continuous[column] = pd.to_numeric(auto_generated_data_df_continuous[column])
+        
         if show_plots:
-            sns.FacetGrid(auto_generated_data_df_continuous, hue = target_column, height=6).map(sns.distplot, column, kde = True).add_legend()             
-            sns.FacetGrid(auto_generated_data_df_continuous, hue = target_column, height=6).map(sns.distplot, column, kde = False).add_legend()     
-           
-            plt.tight_layout()
-            plt.show()        
+            if global_problem_type == 'categorical':
+#                plotter.plot_cat_cat(auto_generated_data_df , x = column , y = target_column, log_column_str = '', log_target_str = '')
+                plotter.plot_cat_cont(x = auto_generated_data_df[column] , y = y_train, kde = True)
+                plotter.plot_cat_cont(x = auto_generated_data_df[column] , y = y_train, kde = True)
+                
+            elif global_problem_type == 'regression':  
+                plotter.plot_cont_cont(auto_generated_data_df[column] , y = y_train)
+                
+            else:
+                raise Exception('target is neither categorical nor regression')
+                    
+                
+#            sns.FacetGrid(auto_generated_data_df_continuous, hue = target_column, height=6).map(sns.distplot, column, kde = True).add_legend()             
+#            sns.FacetGrid(auto_generated_data_df_continuous, hue = target_column, height=6).map(sns.distplot, column, kde = False).add_legend()     
+#           
+#            plt.tight_layout()
+#            plt.show()        
     
     except Exception:
         print('There is non numeric data in auto_generated_data_df_continuous. This should not have happened')
@@ -886,10 +1067,30 @@ for column in auto_generated_hash_df.columns:
             ax = sns.countplot(auto_generated_hash_df[column], hue = train[target_column])
             ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
             plt.tight_layout()
-            plt.show()           
+            plt.show() 
+            
+            if global_problem_type == 'categorical':
+                plotter.plot_cat_cat(x = auto_generated_data_df[column], y = y_train)
+                
+            elif global_problem_type == 'regression':  
+                plotter.plot_cont_cat(auto_generated_data_df[column] , y = y_train)
+                
+            else:
+                raise Exception('target is neither categorical nor regression')
+                
+            
     except Exception:
         pass  
-                        
+    
+
+
+
+
+
+
+
+
+                    
 
 def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_column_from_ohe):   
     
