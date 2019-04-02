@@ -28,7 +28,6 @@ from IPython.display import Image
 from sklearn.tree import export_graphviz
 import pydotplus
 import io
-
 import os
 import pydot
 
@@ -1386,8 +1385,12 @@ def plot2d(x,y,color = 'rgb(255, 215, 0)'):
     plotly.offline.plot(traces)
     return traces
 
-def reduce_dimentions(df, target, algorithm , n_components = 3, perplexity = 30, show_graphs = True):
+
+def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30, show_graphs = True, learning_rate = 10):
     
+    if type(df) == pd.DataFrame:
+        df = df.values
+        
     if algorithm == 'pca':   
         lpca = decomposition.PCA(n_components = n_components)
         
@@ -1399,7 +1402,7 @@ def reduce_dimentions(df, target, algorithm , n_components = 3, perplexity = 30,
         reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)
         #df_pca_original_axis_df = pd.DataFrame(df_new_axis)
         
-#        lpca.explained_variance_ratio_
+        lpca.explained_variance_ratio_
         
         plt.figure()
         plt.plot(lpca.explained_variance_ratio_)
@@ -1411,35 +1414,51 @@ def reduce_dimentions(df, target, algorithm , n_components = 3, perplexity = 30,
         x=reduced_dimention_df[0]
         y=reduced_dimention_df[1]
         z=reduced_dimention_df[2]
-        color = y_train
+        color = target
         plot3d(x,y,z,color)
     
 
             
     elif algorithm == 'cuda_tsne':
         
-        reduced_dimention_np_arr = TSNE(n_components=n_components, perplexity=perplexity, verbose=1).fit_transform(X_train)
+        reduced_dimention_np_arr = TSNE(n_components=n_components, perplexity=perplexity, learning_rate = learning_rate, verbose=1).fit_transform(df)
         reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)
         
         x=reduced_dimention_df[0]
         y=reduced_dimention_df[1]
         
-        color = y_train
-        plot2d(x,y,color)
+        color = target
+        plot2d(x,y)
+        
+#        if target == 1:
+#            color = 'green'
+#        elif target == 1:
+#            color = 'red'
+        plt.scatter(x,y, color)
+            
+        plt.figure()
+        plt.show()
+        
             
         
     else:
-        tsne = manifold.TSNE(n_components = 3, perplexity = perplexity)
-        reduced_dimention_np_arr = tsne.fit_transform(X = X_train)   
+        tsne = manifold.TSNE(n_components = n_components, perplexity = perplexity, learning_rate = learning_rate)
+        reduced_dimention_np_arr = tsne.fit_transform(X = df)   
         reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)
         
         x=reduced_dimention_df[0]
-        y=reduced_dimention_df[1]
-        z=reduced_dimention_df[2]
-        color = y_train
-        plot3d(x,y,z,color)
+        y=reduced_dimention_df[1]        
+        color = target
+        
+        
+        if n_components == 3:
+            z=reduced_dimention_df[2]
+            plot3d(x,y,z,color)
 
-    return reduced_dimention_df
+        elif n_components == 2:           
+           plot2d(x,y,color) 
+           
+    return reduced_dimention_df.values
 
 
 
@@ -1452,7 +1471,7 @@ def standard_scaler(X_train):
 
 
 
-
+#
 message = 'scaled'
 X_train = X_train_dict['original'].copy(deep = True)
 X_train_dict[message] = standard_scaler(X_train)
@@ -1467,15 +1486,38 @@ X_train_dict[message] = X_train
 
 message = 'reduced_dims_on_scaled_tsne'
 X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', perplexity = 100, show_graphs = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10)
 X_train_dict[message] = X_train
+
+
+message = 'reduced_dims_on_scaled_tsne_cuda'
+X_train = X_train_dict['scaled'].copy(deep = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10)
+X_train_dict[message] = X_train
+
 
 
 message = 'reduced_dims_on_unscaled_tsne'
 X_train = X_train_dict['original'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'tsne', perplexity = 100, show_graphs = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True)
 X_train_dict[message] = X_train
 
+
+
+
+
+
+
+
+#for perplexity in range(20,10000, 100):
+#    message = 'reduced_dims_on_scaled_tsne'
+#    X_train = X_train_dict['scaled'].copy(deep = True)
+#    X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'cuda_tsne', perplexity = perplexity, show_graphs = True, learning_rate = 10)
+#    X_train_dict[message] = X_train
+#
+#
+#
+#
 
 
 
