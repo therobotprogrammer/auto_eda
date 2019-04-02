@@ -539,8 +539,8 @@ class plotter:
         plt.tight_layout()
         
 
-        file_name = os.path.join(results_dir + '/' + message + '.svg')
-        plt.savefig(file_name)
+        file_name = os.path.join(results_dir + '/' + message + '.jpg')
+        plt.savefig(file_name, dpi = 1200)
         
         plt.show()
     
@@ -561,8 +561,8 @@ class plotter:
       
         plt.tight_layout()
         
-        file_name = os.path.join(results_dir + '/' + message + '.svg')
-        plt.savefig(file_name)
+        file_name = os.path.join(results_dir + '/' + message + '.jpg')
+        plt.savefig(file_name, dpi = 1200)
         
         plt.show()
         
@@ -578,8 +578,8 @@ class plotter:
         ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
         plt.tight_layout()
         
-        file_name = os.path.join(results_dir + '/' + message + '.svg')
-        plt.savefig(file_name)
+        file_name = os.path.join(results_dir + '/' + message + '.jpg')
+        plt.savefig(file_name, dpi = 1200)
         
         plt.show()
 
@@ -601,9 +601,10 @@ class plotter:
         
 #        sns.FacetGrid(data_df, hue = x, height=6).map(sns.kdeplot, y).add_legend()  
         
-        plt.tight_layout()        
-        file_name = os.path.join(results_dir + '/' + message + '.svg')
-        plt.savefig(file_name)
+        plt.tight_layout() 
+        
+        file_name = os.path.join(results_dir + '/' + message + '.jpg')
+        plt.savefig(file_name, dpi = 1200)
         
         plt.show()
 
