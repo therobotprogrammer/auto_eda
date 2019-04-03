@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn import preprocessing, neighbors, decomposition, manifold
+from sklearn import preprocessing, neighbors, decomposition, manifold, metrics
 from sklearn.preprocessing import LabelEncoder
 import keras
 import math
@@ -100,7 +100,7 @@ log_warnings = set()
    
 
 
-show_plots = True
+show_plots = False
 
 
 train.info()
@@ -424,11 +424,19 @@ def analyze_tree(dt, X_train, y_train, max_depth_search_list_length = 10, filena
     dot_data = StringIO()
     
     os.getcwd()
-    file_path = os.path.join(os.getcwd(), filename)
+    file_path = os.path.join(results_dir, filename)
     
+    feature_names = list(X_train.columns)
+    feature_names = feature_names[0:10]
+    
+    if global_problem_type == 'classification':
+        class_names = y_train.name
+    else:
+        class_names = None
+            
     export_graphviz(dt, out_file=dot_data,  
                     filled=True, rounded=True,
-                    feature_names = X_train.columns, class_names = y_train.name)
+                    feature_names = list(X_train.columns), class_names = class_names)
     graph = pydotplus.graph_from_dot_data(dot_data.getvalue()) 
      
     #Image(graph.create_png())
@@ -1187,6 +1195,7 @@ combined_continuous_df = pd.DataFrame()
 combined_continuous_df = combined_continuous_df.join(train_continuous,how = 'outer')
 combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_continuous,how = 'outer')
 
+
 exclude_from_ohe = ['Pclass', 'SibSp', 'Parch' ]
 
 X_train = pre_processing(combined_categorical_df, combined_continuous_df, imputer = 'random_forest', enable_ohe = True, exclude_column_from_ohe = exclude_from_ohe)
@@ -1222,7 +1231,13 @@ X_train = pre_processing(combined_categorical_df, combined_continuous_df, impute
 # passenger id is dropped as it uniquely identifies the row. This causes overfitting when a lot of trees are used. The model
 # remembers the passenger id and result
 
-drop_and_log_column(X_train, 'PassengerId', 'manually dropped - unique identifier')
+    
+
+if global_problem_type == 'classification':
+    drop_and_log_column(X_train, 'PassengerId', 'manually dropped - unique identifier')
+elif global_problem_type == 'regression':
+    drop_and_log_column(X_train, 'Id', 'manually dropped - unique identifier')
+    
 
 
 X_train_dict['original'] = X_train.copy(deep = True)
@@ -1422,7 +1437,7 @@ if use_extra_trees:
   
 # Adaboost with decision tree
     
-def plot_3d(grid_estimator, plot_type = 'mesh'):
+def plot_estimator_results_3d(grid_estimator, plot_type = 'mesh'):
     cv_results_ = grid_estimator.cv_results_
     #params_df = cv_results_['params']
     params_df = pd.DataFrame(cv_results_['params'])
@@ -1454,14 +1469,14 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
             trace_train = go.Mesh3d(x=x,y=y,z=train_scores,
                        alphahull=3,
                        opacity=.5,
-                       colorscale="Rainbow",
+                       colorscale="Reds",
                        intensity=train_scores,                        
                        )
             
             trace_test = go.Mesh3d(x=x,y=y,z=test_scores,
                        alphahull=3,
                        opacity=.5,
-                       colorscale="Picnic",
+                       colorscale="Greens",
                        intensity=test_scores,                        
                        )
             
@@ -1493,18 +1508,35 @@ def plot_3d(grid_estimator, plot_type = 'mesh'):
 
 
 
+
+def rmse(y_orig, y_pred):
+    return math.sqrt(metrics.mean_squared_error(y_orig,y_pred) )
+
+
 def ada_boost(X_train, y_train, message = ''):
-        base_classifier = tree.DecisionTreeClassifier()
-        
-        ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
+        if global_problem_type == 'classification':            
+            base_classifier = tree.DecisionTreeClassifier()            
+            ada_boost_dt = ensemble.AdaBoostClassifier(base_classifier)
+            scoring = 'accuracy'                      
+            
+        else:
+            base_classifier = tree.DecisionTreeRegressor()  
+            ada_boost_dt = ensemble.AdaBoostRegressor(base_classifier)
+            scoring = metrics.make_scorer(rmse) 
+            scoring = 'neg_mean_squared_error'
+            
+            
+
+            
+
         
         # note: it is very important to specify max depth = 1 so only stumps are built. 
         # if not then whole tree is built causing overfitting. 
         
         ada_boost_grid = {
                             'base_estimator__max_depth' : [1], 
-                            'n_estimators': get_equally_spaced_numbers_in_range(1,50,20) ,
-                            'learning_rate': get_equally_spaced_non_zero_floats_in_range(.10,.7,40) ,
+                            'n_estimators': get_equally_spaced_numbers_in_range(1,1000,10) ,
+                            'learning_rate': get_equally_spaced_non_zero_floats_in_range(.001,.5,10) ,
                 }
     
     #    ada_boost_grid = {
@@ -1513,7 +1545,7 @@ def ada_boost(X_train, y_train, message = ''):
     #                        'learning_rate': [.35] ,
     #            }
         
-        ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = 'accuracy', n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
+        ada_boost_grid_estimator = model_selection.GridSearchCV(ada_boost_dt, ada_boost_grid, scoring = scoring, n_jobs = -1, refit = True, verbose = 1, return_train_score = True, cv =10)
         
         
         ada_boost_grid_estimator.fit(X_train, y_train)
@@ -1521,7 +1553,7 @@ def ada_boost(X_train, y_train, message = ''):
         print('Best SCore: ', ada_boost_grid_estimator.best_score_)
         print('Best Params: ', ada_boost_grid_estimator.best_params_)
         
-        traces = plot_3d(ada_boost_grid_estimator)
+        traces = plot_estimator_results_3d(ada_boost_grid_estimator)
         
         results_ada_boost_grid_estimator = ada_boost_grid_estimator.cv_results_
 
@@ -1551,7 +1583,7 @@ def ada_boost(X_train, y_train, message = ''):
 #####################
 #PCA
     
-def plot3d(x,y,z, color='rgb(204, 204, 204)'):
+def plot3d(x,y,z, color='rgb(204, 204, 204)', title = 'Title', x_label = '', y_label = ''):
     trace = go.Scatter3d(
         x = x,
         y = y,
@@ -1567,11 +1599,46 @@ def plot3d(x,y,z, color='rgb(204, 204, 204)'):
     )
         
     traces = [trace]
-           
-    plotly.offline.plot(traces)
+    
+    
+    layout = go.Layout(         
+        title=dict(
+                    text = message,
+                    
+                    font=dict(
+                                family='Courier New, monospace',
+                                size=48,
+                                color='#7f7f7f'
+                            )
+                    ),   
+                    
+        xaxis=dict(
+                    title = x_label,
+                    
+                    titlefont=dict(
+                                    family='Courier New, monospace',
+                                    size=18,
+                                    color='#7f7f7f'
+                                )
+                    ),
+                    
+        yaxis=dict(
+                    title= y_label,
+                    titlefont=dict(
+                                    family='Courier New, monospace',
+                                    size=18,
+                                    color='#7f7f7f'
+                                )
+                    )
+    )
+        
+    
+    fig = go.Figure(data=traces, layout=layout)
+    filename = os.path.join(results_dir, title)   
+    plotly.offline.plot(fig, filename)
     return traces
 
-def plot2d(x,y,color = 'rgb(255, 215, 0)'):
+def plot2d(x,y,color = 'rgb(255, 215, 0)', title = 'Title', x_label = '', y_label = ''):
     trace1 = go.Scatter(
         x = x,    
         y = y,
@@ -1583,12 +1650,50 @@ def plot2d(x,y,color = 'rgb(255, 215, 0)'):
             showscale=True
         )
     )
-    traces = [trace1]          
-    plotly.offline.plot(traces)
+    traces = [trace1]     
+
+
+
+    layout = go.Layout(         
+        title=dict(
+                    text = message,
+                    
+                    font=dict(
+                                family='Courier New, monospace',
+                                size=48,
+                                color='#7f7f7f'
+                            )
+                    ),   
+                    
+        xaxis=dict(
+                    title = x_label,
+                    
+                    titlefont=dict(
+                                    family='Courier New, monospace',
+                                    size=18,
+                                    color='#7f7f7f'
+                                )
+                    ),
+                    
+        yaxis=dict(
+                    title= y_label,
+                    titlefont=dict(
+                                    family='Courier New, monospace',
+                                    size=18,
+                                    color='#7f7f7f'
+                                )
+                    )
+    )
+                    
+                    
+    fig = go.Figure(data=traces, layout=layout)
+    filename = os.path.join(results_dir, title)    
+    plotly.offline.plot(fig, filename)
+    
     return traces
 
 
-def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30, show_graphs = True, learning_rate = 10):
+def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30, show_graphs = True, learning_rate = 10, message = ''):
     
     if type(df) == pd.DataFrame:
         df = df.values
@@ -1617,7 +1722,7 @@ def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30
         y=reduced_dimention_df[1]
         z=reduced_dimention_df[2]
         color = target
-        plot3d(x,y,z,color)
+        plot3d(x,y,z,color, title = message)
     
 
             
@@ -1655,7 +1760,7 @@ def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30
         
         if n_components == 3:
             z=reduced_dimention_df[2]
-            plot3d(x,y,z,color)
+            plot3d(x,y,z,color, title = message)
 
         elif n_components == 2:           
            plot2d(x,y,color) 
@@ -1673,6 +1778,9 @@ def standard_scaler(X_train):
 
 
 
+ada_boost_analysis = ada_boost(X_train, y_train)
+
+
 #
 message = 'scaled'
 X_train = X_train_dict['original'].copy(deep = True)
@@ -1682,27 +1790,29 @@ X_train_dict[message] = standard_scaler(X_train)
 #where reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
 message = 'reduced_dims_on_scaled_pca'
 X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', perplexity = 100, show_graphs = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', perplexity = 100, show_graphs = True, message = message)
 X_train_dict[message] = X_train
 
 
+message = 'reduced_dims_on_unscaled_tsne'
+X_train = X_train_dict['original'].copy(deep = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, message = message)
+X_train_dict[message] = X_train
+
 message = 'reduced_dims_on_scaled_tsne'
 X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
 X_train_dict[message] = X_train
 
 
 message = 'reduced_dims_on_scaled_tsne_cuda'
 X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
 X_train_dict[message] = X_train
 
 
 
-message = 'reduced_dims_on_unscaled_tsne'
-X_train = X_train_dict['original'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True)
-X_train_dict[message] = X_train
+
 
 
 
