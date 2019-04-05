@@ -100,7 +100,7 @@ log_warnings = set()
    
 
 
-show_plots = False
+show_plots = True
 
 
 train.info()
@@ -299,7 +299,7 @@ def revert_nans_from_df(df, masks):
     
 
 
-def label_encoder(df_original, strategy = 'keep_missing_as_nan'):    
+def label_encoder(df_original, strategy = 'keep_missing_as_nan', offset_labels = True):    
     
     assert (min_data_in_column_percent >= 0 and min_data_in_column_percent <= 1), 'min_data_in_column_percent out of range 0 to 1'
         
@@ -311,7 +311,10 @@ def label_encoder(df_original, strategy = 'keep_missing_as_nan'):
 #    mask_df.columns = df.columns
         
     sys_min = -sys.maxsize -1   
-   
+    
+    
+#    label_encoder_dict = {}
+    
     for column_name in df.columns:  
         total_nan = combined_categorical_df[column_name].isna().sum()
         total_real_data = df.shape[0] -total_nan
@@ -347,7 +350,13 @@ def label_encoder(df_original, strategy = 'keep_missing_as_nan'):
             le.fit(series)
             series = le.transform(series)        
             df[column_name] = series 
-
+            
+            #this is done because later corelation heatmap is drawn. if there is only one feature and rest are nan, than 
+            #that one feature gets a label of 0. Then sklearn has a bug that gives no corelation in heatmap with only 0 and nan values
+            if offset_labels:
+                df[column_name]  = df[column_name]  + 1
+#            
+#            label_encoder_dict['column_name'] = le
 #    ohe = preprocessing.OneHotEncoder(categories = 'auto')
 #    ohe.fit(df)
 #    df = ohe.transform(df).toarray()
@@ -541,7 +550,7 @@ class plotter:
         print(message)
         
         plt.figure()
-        ax = sns.catplot(x= x, hue = y, kind = 'count', height=6)        
+        ax = sns.catplot(x= x, hue = y, kind = 'count', height=6)     
         
         ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
         plt.tight_layout()
@@ -562,7 +571,7 @@ class plotter:
         temp_df[x.name] = x
         temp_df[y.name] = y
         
-        sns.FacetGrid(temp_df, hue = y.name, height=6).map(sns.kdeplot, y.name , vertical = False).add_legend()  
+        sns.FacetGrid(temp_df, hue = y.name, height=6).map(sns.kdeplot, y.name , vertical = False).add_legend()   
 
 #        sns.FacetGrid(x, hue = y, height=6).map(sns.kdeplot, x).add_legend() 
 
@@ -603,7 +612,7 @@ class plotter:
         temp_df[y.name] = y
         
 #        sns.FacetGrid(x, hue = x, height=6).map(sns.kdeplot, y, vertical = False).add_legend()  
-        sns.FacetGrid(temp_df, hue = x.name, height=6).map(sns.kdeplot, y.name , vertical = False).add_legend()  
+        sns.FacetGrid(temp_df, hue = x.name, height=6).map(sns.kdeplot, y.name , vertical = False).add_legend()   
 
         
         
@@ -622,6 +631,10 @@ class plotter:
 #plotter.plot_cont_cat(x=train['SaleType'], y=y_train)
 #
 #train[train.index.duplicated()]
+
+
+
+
 
 
 for idx, column in enumerate(train.columns):
@@ -1093,69 +1106,6 @@ for column in auto_generated_hash_df.columns:
     
 
 
-
-
-
-
-
-
-                    
-
-def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_column_from_ohe):   
-    
-    
-    #label encode categorical
-    
-    categorical_df_label_encoded =  label_encoder(categorical_df, strategy = 'keep_missing_as_nan')
-    #here outer is used. so continuous
-    cat_columns = categorical_df_label_encoded.columns
-    cont_columns = continuous_df.columns
-    
-    joint_df = categorical_df_label_encoded.join( continuous_df, how = 'outer')      
-
-    #get indexes of categorical columns. this is used by miss_forest to identify categorical features
-    cat_column_indexes_in_joint_df = []    
-    for column in cat_columns:
-        cat_column_indexes_in_joint_df.append(joint_df.columns.get_loc(column))
-    
-    
-    cat_column_indexes_in_joint_df = np.asarray(cat_column_indexes_in_joint_df)
-    
-    
-    if imputer == 'random_forest':
-        print('Using random forest as imputer')
-        imp = MissForest(max_iter = 10, n_estimators = 1000, n_jobs = 24, verbose = 0)
-        imputed_df = imp.fit_transform(joint_df, cat_vars = cat_column_indexes_in_joint_df )
-        #imputation leads to loss of column information. this step restores column names and gives back dataframe
-        imputed_df = pd.DataFrame(imputed_df)
-        imputed_df.columns = joint_df.columns
-        
-    elif imputer == 'knn':
-        col_max_missing = 1        
-        if col_max_missing > min_data_in_column_percent:
-            warn('manual override: There were too many missing columns for knn imputation. col_max_missing = '+ str(col_max_missing * 100) + ' percent' + '   min_data_in_column_percent:' + str(min_data_in_column_percent))
-        
-        imp = KNNImputer(col_max_missing=col_max_missing)
-        imputed_df = imp.fit_transform(joint_df)    
-        imputed_df = pd.DataFrame(imputed_df)
-        imputed_df.columns = joint_df.columns
-    
-    if enable_ohe:
-        #the cat and cont are seperated and then joint so that the order is preserved after one hot
-        imputed_cat_df = imputed_df[list(cat_columns)]
-        imputed_cont_df = imputed_df[list(cont_columns)]
-        
-        
-        #one hot categorical columns    
-        imputed_cat_df = one_hot(imputed_cat_df, exclude_column_from_ohe)
-        
-        imputed_df = imputed_cat_df.join(imputed_cont_df,how = 'outer')
-
-    
-    
-    return imputed_df
-    
-
 def one_hot(df, exclude_from_ohe = []):
     cat_columns = df.columns
     
@@ -1183,6 +1133,143 @@ def one_hot(df, exclude_from_ohe = []):
           
     return df_after_one_hot
 
+
+
+def show_heatmap(X_train, message = '', x_label = '', y_label = ''):
+    
+    #Show corelated features . Dont use np.corrcoef as it is not nan tolerant
+    corr = np.corrcoef(X_train.values, rowvar=False)
+    
+    sns.heatmap(corr)  
+    plt.show()   
+    
+    corr_df = X_train.corr()
+    
+#    corr = np.corrcoef(X_train)
+#    corr_df = pd.DataFrame(corr)
+    
+#    corr_df = pd.DataFrame(corr, columns = X_train.columns)
+
+    trace = go.Heatmap( z=corr_df, x = corr_df.columns , y = corr_df.columns , colorscale='Viridis')
+    
+    traces = [trace]
+    
+    layout = go.Layout(         
+        title=dict(
+                    text = message,
+                    
+                    font=dict(
+                                family='Courier New, monospace',
+                                size=48,
+                                color='#7f7f7f'
+                            )
+                    ),   
+                    
+        xaxis=dict(
+                    title = x_label,
+                    
+                    titlefont=dict(
+                                    family='Courier New, monospace',
+                                    size=18,
+                                    color='#7f7f7f'
+                                )
+                    ),
+                    
+        yaxis=dict(
+                    title= y_label,
+                    titlefont=dict(
+                                    family='Courier New, monospace',
+                                    size=18,
+                                    color='#7f7f7f'
+                                )
+                    )
+    )
+        
+    
+    fig = go.Figure(data=traces, layout=layout)
+    
+    filename = os.path.join(results_dir, message +  '.html')   
+    plotly.offline.plot(fig, show_link = True, filename = filename)
+
+
+
+
+                    
+
+def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_column_from_ohe):   
+    
+        
+    #label encode categorical
+    
+    categorical_df_label_encoded =  label_encoder(categorical_df, strategy = 'keep_missing_as_nan')
+    #here outer is used. so continuous
+    cat_columns = categorical_df_label_encoded.columns
+    cont_columns = continuous_df.columns
+    
+    joint_df = categorical_df_label_encoded.join( continuous_df, how = 'outer')      
+    
+    if show_plots:
+        show_heatmap(joint_df, message = 'heatmap_before_imputation')
+
+    #get indexes of categorical columns. this is used by miss_forest to identify categorical features
+    cat_column_indexes_in_joint_df = []    
+    for column in cat_columns:
+        cat_column_indexes_in_joint_df.append(joint_df.columns.get_loc(column))
+    
+    
+    cat_column_indexes_in_joint_df = np.asarray(cat_column_indexes_in_joint_df)
+    
+    
+    if imputer == 'random_forest':
+        print('Using random forest as imputer')
+        imp = MissForest(max_iter = 2, n_estimators = 10, n_jobs = 24, verbose = 0)
+        imputed_df = imp.fit_transform(joint_df, cat_vars = cat_column_indexes_in_joint_df )
+        #imputation leads to loss of column information. this step restores column names and gives back dataframe
+        imputed_df = pd.DataFrame(imputed_df)
+        imputed_df.columns = joint_df.columns
+        
+    elif imputer == 'knn':
+        col_max_missing = 1        
+        if col_max_missing > min_data_in_column_percent:
+            warn('manual override: There were too many missing columns for knn imputation. col_max_missing = '+ str(col_max_missing * 100) + ' percent' + '   min_data_in_column_percent:' + str(min_data_in_column_percent))
+        
+        imp = KNNImputer(col_max_missing=col_max_missing)
+        imputed_df = imp.fit_transform(joint_df)    
+        imputed_df = pd.DataFrame(imputed_df)
+        imputed_df.columns = joint_df.columns
+    
+    elif imputer == None:
+        #no imputation
+        imputed_df = joint_df
+        
+    else:
+        warn('incorrect imputer')
+        raise Exception('Incorrect imputer specified. Use None for no imputation')
+    
+    if show_plots:
+        show_heatmap(imputed_df, message = 'heatmap_after_imputation')
+        
+        
+
+    
+    if enable_ohe:
+        #the cat and cont are seperated and then joint so that the order is preserved after one hot
+        imputed_cat_df = imputed_df[list(cat_columns)]
+        imputed_cont_df = imputed_df[list(cont_columns)]
+        
+        
+        #one hot categorical columns    
+        imputed_cat_df = one_hot(imputed_cat_df, exclude_column_from_ohe)
+        
+        imputed_df = imputed_cat_df.join(imputed_cont_df,how = 'outer')
+
+    
+    
+    return imputed_df
+    
+
+
+
 combined_categorical_df = pd.DataFrame()
 combined_categorical_df = combined_categorical_df.join(train_categorical,how = 'outer')
 combined_categorical_df = combined_categorical_df.join(auto_generated_data_df_categorical,how = 'outer')
@@ -1198,7 +1285,19 @@ combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_cont
 
 exclude_from_ohe = ['Pclass', 'SibSp', 'Parch' ]
 
+show_plots = True
 X_train = pre_processing(combined_categorical_df, combined_continuous_df, imputer = 'random_forest', enable_ohe = True, exclude_column_from_ohe = exclude_from_ohe)
+
+
+
+
+
+
+
+
+    
+
+
 
 
 #combined_categorical_preprocessed_df = cat_preprocess(combined_categorical_df, exclude_from_ohe = exclude_from_ohe)
@@ -1248,16 +1347,18 @@ X_train_dict['original'] = X_train.copy(deep = True)
 #
 #
 #tree
-dtree = tree.DecisionTreeClassifier()
-dtree.fit(X_train, y_train)
 
-dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list_length = 10)
 
 
 ####################################################################################################3
 
 use_dtree = False
 if use_dtree:
+    dtree = tree.DecisionTreeClassifier()
+    dtree.fit(X_train, y_train)
+    
+    dtree_pre_analysis = analyze_tree(dtree, X_train, y_train, max_depth_search_list_length = 10)
+
     dtree = tree.DecisionTreeClassifier(presort = True)
     
     dt_param_grid = {
@@ -1583,7 +1684,7 @@ def ada_boost(X_train, y_train, message = ''):
 #####################
 #PCA
     
-def plot3d(x,y,z, color='rgb(204, 204, 204)', title = 'Title', x_label = '', y_label = ''):
+def plot3d(x,y,z, color='rgb(204, 204, 204)', message = 'Title', x_label = '', y_label = ''):
     trace = go.Scatter3d(
         x = x,
         y = y,
@@ -1634,11 +1735,11 @@ def plot3d(x,y,z, color='rgb(204, 204, 204)', title = 'Title', x_label = '', y_l
         
     
     fig = go.Figure(data=traces, layout=layout)
-    filename = os.path.join(results_dir, title)   
+    filename = os.path.join(results_dir, message +  '.html')
     plotly.offline.plot(fig, filename)
     return traces
 
-def plot2d(x,y,color = 'rgb(255, 215, 0)', title = 'Title', x_label = '', y_label = ''):
+def plot2d(x,y,color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_label = ''):
     trace1 = go.Scatter(
         x = x,    
         y = y,
@@ -1687,7 +1788,7 @@ def plot2d(x,y,color = 'rgb(255, 215, 0)', title = 'Title', x_label = '', y_labe
                     
                     
     fig = go.Figure(data=traces, layout=layout)
-    filename = os.path.join(results_dir, title)    
+    filename = os.path.join(results_dir, message +  '.html')   
     plotly.offline.plot(fig, filename)
     
     return traces
@@ -1722,7 +1823,7 @@ def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30
         y=reduced_dimention_df[1]
         z=reduced_dimention_df[2]
         color = target
-        plot3d(x,y,z,color, title = message)
+        plot3d(x,y,z,color, message = message)
     
 
             
@@ -1735,7 +1836,7 @@ def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30
         y=reduced_dimention_df[1]
         
         color = target
-        plot2d(x,y)
+        plot2d(x,y, message = 'CUDA TSNE')
         
 #        if target == 1:
 #            color = 'green'
@@ -1760,10 +1861,10 @@ def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30
         
         if n_components == 3:
             z=reduced_dimention_df[2]
-            plot3d(x,y,z,color, title = message)
+            plot3d(x,y,z,color, message = message)
 
         elif n_components == 2:           
-           plot2d(x,y,color) 
+           plot2d(x,y,color, message = 'TSNE') 
            
     return reduced_dimention_df.values
 
@@ -1809,6 +1910,7 @@ message = 'reduced_dims_on_scaled_tsne_cuda'
 X_train = X_train_dict['scaled'].copy(deep = True)
 X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
 X_train_dict[message] = X_train
+
 
 
 
