@@ -1734,9 +1734,10 @@ def plot3d(x,y,z, color='rgb(204, 204, 204)', message = 'Title', x_label = '', y
     )
         
     
-    fig = go.Figure(data=traces, layout=layout)
-    filename = os.path.join(results_dir, message +  '.html')
-    plotly.offline.plot(fig, filename)
+    fig = go.Figure(data=traces, layout=layout)   
+    filename = os.path.join(results_dir, message +  '.html')   
+    plotly.offline.plot(fig, show_link = True, filename = filename)
+    
     return traces
 
 def plot2d(x,y,color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_label = ''):
@@ -1789,7 +1790,7 @@ def plot2d(x,y,color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_la
                     
     fig = go.Figure(data=traces, layout=layout)
     filename = os.path.join(results_dir, message +  '.html')   
-    plotly.offline.plot(fig, filename)
+    plotly.offline.plot(fig, show_link = True, filename = filename)
     
     return traces
 
@@ -1822,8 +1823,7 @@ def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30
         x=reduced_dimention_df[0]
         y=reduced_dimention_df[1]
         z=reduced_dimention_df[2]
-        color = target
-        plot3d(x,y,z,color, message = message)
+        plot3d(x,y,z,color = target, message = message)
     
 
             
@@ -1910,8 +1910,6 @@ message = 'reduced_dims_on_scaled_tsne_cuda'
 X_train = X_train_dict['scaled'].copy(deep = True)
 X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
 X_train_dict[message] = X_train
-
-
 
 
 
