@@ -77,10 +77,11 @@ def plot_data_3d(X, y, message = ''):
     ax.set_zlabel("target")
     plt.title(message, fontdict = {'fontsize' : 20})
     
-#    for angle in range(0, 360):
-#        ax.view_init(30, angle)
-#        plt.draw()
-#        plt.pause(.01)
+    if show_animation: 
+        for angle in range(0, 360):
+            ax.view_init(20, angle)
+            plt.draw()
+            plt.pause(.01)
     plt.show()
 
 def plot_model_3d(estimator, X, y, message = ''):
@@ -103,10 +104,11 @@ def plot_model_3d(estimator, X, y, message = ''):
     plt.title(message, fontdict = {'fontsize' : 20})
     plt.tight_layout()    
     
-#    for angle in range(0, 360):
-#        ax.view_init(20, angle)
-#        plt.draw()
-#        plt.pause(.01)        
+    if show_animation: 
+        for angle in range(0, 360):
+            ax.view_init(20, angle)
+            plt.draw()
+            plt.pause(.01)      
     plt.show()
 
 def plot_residuals(estimator, X, y):
@@ -216,16 +218,20 @@ def grid_search_two_parameters(estimator, grid, X, y, scoring="accuracy", messag
     ax.set_xlabel(param1_name)
     ax.set_ylabel(param2_name)
     ax.set_zlabel('performance')
-#    plt.legend(loc="best")
     plt.tight_layout()
     plt.title('Grid Search: ' + message, fontdict = {'fontsize' : 20})
     
    
-#    for angle in range(0, 180):
-#        ax.view_init(20, angle)
-#        plt.draw()
-#        plt.pause(.01)
+    if show_animation: 
+        for angle in range(0, 360):
+            ax.view_init(20, angle)
+            plt.draw()
+            plt.pause(.01)
     plt.show()
+
+
+
+show_animation = False
 
 
 #linear pattern in 2d
