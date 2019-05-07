@@ -1740,7 +1740,10 @@ def plot3d(x,y,z, color='rgb(204, 204, 204)', message = 'Title', x_label = '', y
     
     return traces
 
-def plot2d(x,y,color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_label = ''):
+def plot2d(x,y, threshold = '', color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_label = ''):
+    if threshold != '':
+        color = list(np.full(threshold, 1)) + list(np.full(y.shape[0] - threshold , 0))
+        
     trace1 = go.Scatter(
         x = x,    
         y = y,
@@ -1784,7 +1787,8 @@ def plot2d(x,y,color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_la
                                     size=18,
                                     color='#7f7f7f'
                                 )
-                    )
+                    ),                   
+                  
     )
                     
                     
@@ -1795,14 +1799,35 @@ def plot2d(x,y,color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_la
     return traces
 
 
-def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30, show_graphs = True, learning_rate = 10, message = ''):
-    
+def plot_series(y, threshold = '', message = ''):
+    x_labels = list(range(0, y.shape[0]))
+    plot2d(x_labels, y , threshold = threshold, message = message)
+
+
+
+def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = None , n_components = None, perplexity = 30, show_graphs = True, learning_rate = 10, message = ''):
+ 
     if type(df) == pd.DataFrame:
         df = df.values
         
-    if algorithm == 'pca':   
-        lpca = decomposition.PCA(n_components = n_components)
+    if algorithm == 'pca':              
+        if pca_cumulative_ratio_threshold != None and n_components != None :        
+            warn('reduce_dimentions: cannot have both pca_cumulative_ratio_threshold and n_components. Prioritising pca_cumulative_ratio_threshold and setting n_components to full dimention of data')
+            n_components = df.shape[1]
+        elif n_components != None and pca_cumulative_ratio_threshold == None:
+            if n_components > df.shape[1]:
+                warn('PCA: n_components > feature columns in data. Setting n_components = features in data')
+                n_components = df.shape[1]
+            pca_cumulative_ratio_threshold = 1.0
+        elif pca_cumulative_ratio_threshold != None and n_components == None :
+            n_components = df.shape[1]
+        else:
+            n_components = df.shape[1]
+            pca_cumulative_ratio_threshold = 1.0
         
+        assert (pca_cumulative_ratio_threshold >= 0 and pca_cumulative_ratio_threshold <= 1)
+        
+        lpca = decomposition.PCA(n_components = n_components)
         lpca.fit(df)       
         
         reduced_dimention_np_arr = lpca.fit_transform(df)
@@ -1813,19 +1838,37 @@ def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30
         
         lpca.explained_variance_ratio_
         
-        plt.figure()
-        plt.plot(lpca.explained_variance_ratio_)
-        plt.ylabel('Variance Ratio')
-        plt.xlabel('PCA Axis')
-        plt.show()
+#        plt.figure()
+#        plt.plot(lpca.explained_variance_ratio_)
+#        plt.ylabel('Variance Ratio')
+#        plt.xlabel('PCA Axis')
+#        plt.show()
+        
+        plot_series(lpca.explained_variance_ratio_, message = 'PCA: explained_variance_ratio_')
+        
+#        plt.figure()
+        cumulative_variance = np.cumsum(lpca.explained_variance_ratio_)
+
+#        plt.plot(cumulative_variance)
+#        plt.ylabel('Cumulative Variance Ratio')
+#        plt.xlabel('PCA Axis')
+#        plt.show()
+
+#        x_labels = list(range(0, cumulative_variance.shape[0]))
+        index_of_pca_first_redundant_pca_axis = np.argmax(cumulative_variance > pca_cumulative_ratio_threshold) + 1
+        
+        print('Cumulative Varience Threshold of ', pca_cumulative_ratio_threshold, '  achieved by axis at index ', index_of_pca_first_redundant_pca_axis, ' of ', df.shape[1], ' axis'  )
+
+
+        plot_series(cumulative_variance, threshold = index_of_pca_first_redundant_pca_axis , message = 'PCA: Cumulative Variance')
         
         
         x=reduced_dimention_df[0]
         y=reduced_dimention_df[1]
         z=reduced_dimention_df[2]
-        plot3d(x,y,z,color = target, message = message)
-    
-
+        plot3d(x,y,z,color = target, message = message + ' - Top 3 Principle Axis only')
+        
+        reduced_dimention_df = reduced_dimention_df.drop(columns = list(range(index_of_pca_first_redundant_pca_axis , df.shape[1])))
             
     elif algorithm == 'cuda_tsne':
         
@@ -1864,7 +1907,7 @@ def reduce_dimentions(df, target , algorithm , n_components = 3, perplexity = 30
             plot3d(x,y,z,color, message = message)
 
         elif n_components == 2:           
-           plot2d(x,y,color, message = 'TSNE') 
+           plot2d(x,y,color = color, message = 'TSNE') 
            
     return reduced_dimention_df.values
 
@@ -1916,9 +1959,39 @@ X_train_dict[message] = X_train
 
 
 
-
-
-
+#############################################################3
+## Outlier removal 
+#import sys
+#import os
+#path = os.path.abspath(os.path.join('.'))
+#sys.path.append(path)
+#path = '/home/pt/Documents/ds_algo/2019-jan/utils'
+#sys.path.append(path)
+#
+#
+#from common_utils  import *
+#from outlier_utils import *
+#from sklearn.model_selection import train_test_split
+#from sklearn import metrics, preprocessing, tree, covariance, linear_model, ensemble, neighbors, svm, model_selection, feature_selection, kernel_ridge
+#from sklearn.preprocessing import PolynomialFeatures
+#import pandas as pd
+#import numpy as np
+#
+#
+#message = 'reduced_dims_on_scaled_pca'
+#X_train_dict[message] 
+#
+#iso_forest_estimator = ensemble.IsolationForest()
+#iso_forest_grid = {'contamination':[0.1, 0.2, 0.25, 0.3]}
+#grid_search_plot_models_outliers(iso_forest_estimator, iso_forest_grid, X_train_dict[message])
+#
+#
+#
+#
+#
+#
+#
+#
 
 
 #for perplexity in range(20,10000, 100):
