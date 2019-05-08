@@ -100,7 +100,7 @@ log_warnings = set()
    
 
 
-show_plots = True
+show_plots = False
 
 
 train.info()
@@ -1855,7 +1855,10 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
 #        plt.show()
 
 #        x_labels = list(range(0, cumulative_variance.shape[0]))
-        index_of_pca_first_redundant_pca_axis = np.argmax(cumulative_variance > pca_cumulative_ratio_threshold) + 1
+#        index_of_pca_first_redundant_pca_axis = np.argmax(cumulative_variance <= pca_cumulative_ratio_threshold) + 1
+        
+        index_of_pca_first_redundant_pca_axis = np.searchsorted(cumulative_variance, pca_cumulative_ratio_threshold)+1
+
         
         print('Cumulative Varience Threshold of ', pca_cumulative_ratio_threshold, '  achieved by axis at index ', index_of_pca_first_redundant_pca_axis, ' of ', df.shape[1], ' axis'  )
 
@@ -1868,8 +1871,10 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
         z=reduced_dimention_df[2]
         plot3d(x,y,z,color = target, message = message + ' - Top 3 Principle Axis only')
         
+        
         reduced_dimention_df = reduced_dimention_df.drop(columns = list(range(index_of_pca_first_redundant_pca_axis , df.shape[1])))
-            
+        
+        
     elif algorithm == 'cuda_tsne':
         
         reduced_dimention_np_arr = TSNE(n_components=n_components, perplexity=perplexity, learning_rate = learning_rate, verbose=1).fit_transform(df)
@@ -1909,7 +1914,7 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
         elif n_components == 2:           
            plot2d(x,y,color = color, message = 'TSNE') 
            
-    return reduced_dimention_df.values
+    return reduced_dimention_df
 
 
 
@@ -1923,6 +1928,24 @@ def standard_scaler(X_train):
 
 
 ada_boost_analysis = ada_boost(X_train, y_train)
+
+#
+#
+#message = 'reduced_dims_on_unscaled_tsne'
+#X_train = X_train_dict['original'].copy(deep = True)
+#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, message = message)
+#X_train_dict[message] = X_train
+
+#message = 'reduced_dims_on_scaled_tsne_cuda'
+#X_train = X_train_dict['scaled'].copy(deep = True)
+#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
+#X_train_dict[message] = X_train
+
+
+#message = 'reduced_dims_on_scaled_tsne'
+#X_train = X_train_dict['scaled'].copy(deep = True)
+#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
+#X_train_dict[message] = X_train
 
 
 #
@@ -1938,21 +1961,16 @@ X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', perpl
 X_train_dict[message] = X_train
 
 
-message = 'reduced_dims_on_unscaled_tsne'
-X_train = X_train_dict['original'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, message = message)
+#TSNE makes the assumption of local linearity which might not hold in high dimensions 
+#where the manifold may be varying and PCA can help alleviate this issue by reducing 
+#the dimensionality of the data.
+
+message = 'reduced_dims_tsne_on_scaled_pca'
+X_train = X_train_dict['reduced_dims_on_scaled_pca'].copy(deep = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
 X_train_dict[message] = X_train
 
-message = 'reduced_dims_on_scaled_tsne'
-X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
-X_train_dict[message] = X_train
 
-
-message = 'reduced_dims_on_scaled_tsne_cuda'
-X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
-X_train_dict[message] = X_train
 
 
 
