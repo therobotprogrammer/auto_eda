@@ -1617,6 +1617,8 @@ def plot_estimator_results_3d(grid_estimator, plot_type = 'mesh'):
 def rmse(y_orig, y_pred):
     return math.sqrt(metrics.mean_squared_error(y_orig,y_pred) )
 
+def log_rmse(y_orig, y_pred):
+    return math.sqrt(metrics.mean_squared_log_error(y_orig,y_pred) )
 
 def ada_boost(X_train, y_train, message = ''):
         if global_problem_type == 'classification':            
@@ -1628,7 +1630,7 @@ def ada_boost(X_train, y_train, message = ''):
             base_classifier = tree.DecisionTreeRegressor()  
             ada_boost_dt = ensemble.AdaBoostRegressor(base_classifier)
             scoring = metrics.make_scorer(rmse) 
-            scoring = 'neg_mean_squared_error'
+            scoring = 'neg_mean_squared_log_error'
             
             
 
@@ -1936,7 +1938,7 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
 
 
 def remove_outliers(df, n_estimators = 1000, contamination = .01, message = ''):    
-    isoforest = ensemble.IsolationForest(n_estimators = 10000, contamination = .01, n_jobs = -1 )
+    isoforest = ensemble.IsolationForest(n_estimators = n_estimators, contamination = contamination, n_jobs = -1 )
     outliers = isoforest.fit_predict(df)
     outliers = pd.DataFrame(outliers)
     
@@ -2007,7 +2009,7 @@ X_train_dict[message] = X_train
 
 message = 'removed_outliers_on_pca_data_with_isolation_forest'
 X_train = X_train_dict['reduced_dims_on_scaled_pca'].copy(deep = True)
-X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamination = .03, message = message )
+X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamination = .01, message = message )
 
 
 
