@@ -30,6 +30,10 @@ import pydotplus
 import io
 import os
 import pydot
+from sklearn.manifold import Isomap
+from sklearn import ensemble
+
+
 
 
 import plotly 
@@ -1684,7 +1688,11 @@ def ada_boost(X_train, y_train, message = ''):
 #####################
 #PCA
     
+
 def plot3d(x,y,z, color='rgb(204, 204, 204)', message = 'Title', x_label = '', y_label = ''):
+    if type(color) == pd.DataFrame:
+        color = color[0].values
+        
     trace = go.Scatter3d(
         x = x,
         y = y,
@@ -1708,7 +1716,7 @@ def plot3d(x,y,z, color='rgb(204, 204, 204)', message = 'Title', x_label = '', y
                     
                     font=dict(
                                 family='Courier New, monospace',
-                                size=48,
+                                size=36,
                                 color='#7f7f7f'
                             )
                     ),   
@@ -1740,9 +1748,11 @@ def plot3d(x,y,z, color='rgb(204, 204, 204)', message = 'Title', x_label = '', y
     
     return traces
 
+
 def plot2d(x,y, threshold = '', color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_label = ''):
     if threshold != '':
-        color = list(np.full(threshold, 1)) + list(np.full(y.shape[0] - threshold , 0))
+        threshold = threshold + 1
+        color = list(np.full(threshold, 1)) + list(np.full(y.shape[0] - threshold, 0))
         
     trace1 = go.Scatter(
         x = x,    
@@ -1805,10 +1815,33 @@ def plot_series(y, threshold = '', message = ''):
 
 
 
+def iso_map(df, target , n_components = 3, show_graphs = True, message = ''):
+    embedding = Isomap(n_components = n_components)
+    
+    reduced_dimention = embedding.fit_transform(df)
+    reduced_dimention_df = pd.DataFrame(reduced_dimention)
+    
+    if show_graphs == True:        
+        if n_components == 3:
+            x=reduced_dimention_df[0]
+            y=reduced_dimention_df[1]
+            z=reduced_dimention_df[2]
+            plot3d(x,y, z, color = target, message = 'Isomap on scaled')
+            
+        elif n_components == 2:
+            x=reduced_dimention_df[0]
+            y=reduced_dimention_df[1]
+            plot2d(x,y, color = target, message = 'Isomap on scaled')
+        
+    return reduced_dimention_df
+
+
+
 def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = None , n_components = None, perplexity = 30, show_graphs = True, learning_rate = 10, message = ''):
- 
     if type(df) == pd.DataFrame:
         df = df.values
+    if type(target) == pd.DataFrame:
+        target = target[0].values
         
     if algorithm == 'pca':              
         if pca_cumulative_ratio_threshold != None and n_components != None :        
@@ -1828,51 +1861,37 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
         assert (pca_cumulative_ratio_threshold >= 0 and pca_cumulative_ratio_threshold <= 1)
         
         lpca = decomposition.PCA(n_components = n_components)
-        lpca.fit(df)       
+#        lpca.fit(df)       
         
-        reduced_dimention_np_arr = lpca.fit_transform(df)
-#        df_original_axis = lpca.inverse_transform(reduced_dimention_np_arr)
-        
-        reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)
-        #df_pca_original_axis_df = pd.DataFrame(df_new_axis)
-        
-        lpca.explained_variance_ratio_
-        
-#        plt.figure()
-#        plt.plot(lpca.explained_variance_ratio_)
-#        plt.ylabel('Variance Ratio')
-#        plt.xlabel('PCA Axis')
-#        plt.show()
-        
+        reduced_dimention_np_arr = lpca.fit_transform(df)        
+        reduced_dimention_df = pd.DataFrame(reduced_dimention_np_arr)        
+        lpca.explained_variance_ratio_        
         plot_series(lpca.explained_variance_ratio_, message = 'PCA: explained_variance_ratio_')
-        
-#        plt.figure()
-        cumulative_variance = np.cumsum(lpca.explained_variance_ratio_)
+        cumulative_variance = np.cumsum(lpca.explained_variance_ratio_)        
+        index_of_pca_first_redundant_pca_axis = np.searchsorted(cumulative_variance, pca_cumulative_ratio_threshold, side = 'right') 
 
-#        plt.plot(cumulative_variance)
-#        plt.ylabel('Cumulative Variance Ratio')
-#        plt.xlabel('PCA Axis')
-#        plt.show()
-
-#        x_labels = list(range(0, cumulative_variance.shape[0]))
-#        index_of_pca_first_redundant_pca_axis = np.argmax(cumulative_variance <= pca_cumulative_ratio_threshold) + 1
-        
-        index_of_pca_first_redundant_pca_axis = np.searchsorted(cumulative_variance, pca_cumulative_ratio_threshold)+1
-
-        
-        print('Cumulative Varience Threshold of ', pca_cumulative_ratio_threshold, '  achieved by axis at index ', index_of_pca_first_redundant_pca_axis, ' of ', df.shape[1], ' axis'  )
-
+        if max(cumulative_variance) >= pca_cumulative_ratio_threshold:
+            print('Cumulative Varience Threshold of ', pca_cumulative_ratio_threshold, '  achieved by PC axis at index ', index_of_pca_first_redundant_pca_axis, ' where last PC index is ', df.shape[1]- 1  )
+        else:
+            warn('Cannot capture all varience in ' +  str(n_components) + ' PCA components. Try increasing PCA components.' +
+                 'Max variance captured = ' + str(max(cumulative_variance)) )
+            
 
         plot_series(cumulative_variance, threshold = index_of_pca_first_redundant_pca_axis , message = 'PCA: Cumulative Variance')
         
         
         x=reduced_dimention_df[0]
         y=reduced_dimention_df[1]
-        z=reduced_dimention_df[2]
-        plot3d(x,y,z,color = target, message = message + ' - Top 3 Principle Axis only')
+        
+        if n_components == 2:
+            plot2d(x,y,color = target, message = message + ' - Top 3 Principle Axis only')
+        
+        elif n_components > 2:
+            z=reduced_dimention_df[2]        
+            plot3d(x,y,z,color = target, message = message + ' - Top 3 Principle Axis only')
         
         
-        reduced_dimention_df = reduced_dimention_df.drop(columns = list(range(index_of_pca_first_redundant_pca_axis , df.shape[1])))
+        reduced_dimention_df = reduced_dimention_df.drop(columns = list(range(index_of_pca_first_redundant_pca_axis , reduced_dimention_df.shape[1])))
         
         
     elif algorithm == 'cuda_tsne':
@@ -1886,17 +1905,15 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
         color = target
         plot2d(x,y, message = 'CUDA TSNE')
         
-#        if target == 1:
-#            color = 'green'
-#        elif target == 1:
-#            color = 'red'
         plt.scatter(x,y, color)
             
         plt.figure()
         plt.show()
         
             
-        
+    elif algorithm == 'isomap':
+        reduced_dimention_df = iso_map(df, target,  n_components = n_components)      
+    
     else:
         tsne = manifold.TSNE(n_components = n_components, perplexity = perplexity, learning_rate = learning_rate)
         reduced_dimention_np_arr = tsne.fit_transform(X = df)   
@@ -1918,6 +1935,32 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
 
 
 
+def remove_outliers(df, n_estimators = 1000, contamination = .01, message = ''):    
+    isoforest = ensemble.IsolationForest(n_estimators = 10000, contamination = .01, n_jobs = -1 )
+    outliers = isoforest.fit_predict(df)
+    outliers = pd.DataFrame(outliers)
+    
+    x=df[0]
+    y=df[1]
+    
+    
+    if show_plots:
+        if df.shape[1] == 2:
+            plot2d(x,y,color = outliers, message = message)
+        
+        elif df.shape[1] > 2:
+            z=df[2]        
+            plot3d(x,y,z,color = outliers, message = message + ' C='+ str(contamination) +' - Top 3 Axis only')
+    
+    inliers = df[outliers[0] == 1]
+    inliers = pd.DataFrame(inliers)
+
+    return inliers
+
+
+
+
+
 def standard_scaler(X_train):
     scaler = preprocessing.StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train[X_train.columns])
@@ -1929,24 +1972,6 @@ def standard_scaler(X_train):
 
 ada_boost_analysis = ada_boost(X_train, y_train)
 
-#
-#
-#message = 'reduced_dims_on_unscaled_tsne'
-#X_train = X_train_dict['original'].copy(deep = True)
-#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, message = message)
-#X_train_dict[message] = X_train
-
-#message = 'reduced_dims_on_scaled_tsne_cuda'
-#X_train = X_train_dict['scaled'].copy(deep = True)
-#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
-#X_train_dict[message] = X_train
-
-
-#message = 'reduced_dims_on_scaled_tsne'
-#X_train = X_train_dict['scaled'].copy(deep = True)
-#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
-#X_train_dict[message] = X_train
-
 
 #
 message = 'scaled'
@@ -1957,7 +1982,7 @@ X_train_dict[message] = standard_scaler(X_train)
 #where reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
 message = 'reduced_dims_on_scaled_pca'
 X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', perplexity = 100, show_graphs = True, message = message)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', show_graphs = True, message = message)
 X_train_dict[message] = X_train
 
 
@@ -1972,44 +1997,29 @@ X_train_dict[message] = X_train
 
 
 
+message = 'reduced_dims_Isomap'
+X_train = X_train_dict['scaled'].copy(deep = True)
+X_train = reduce_dimentions(X_train, y_train, algorithm = 'isomap', n_components = 3, show_graphs = True, message = message)
+X_train_dict[message] = X_train
+
+
+
+
+message = 'removed_outliers_on_pca_data_with_isolation_forest'
+X_train = X_train_dict['reduced_dims_on_scaled_pca'].copy(deep = True)
+X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamination = .03, message = message )
 
 
 
 
 
-#############################################################3
-## Outlier removal 
-#import sys
-#import os
-#path = os.path.abspath(os.path.join('.'))
-#sys.path.append(path)
-#path = '/home/pt/Documents/ds_algo/2019-jan/utils'
-#sys.path.append(path)
-#
-#
-#from common_utils  import *
-#from outlier_utils import *
-#from sklearn.model_selection import train_test_split
-#from sklearn import metrics, preprocessing, tree, covariance, linear_model, ensemble, neighbors, svm, model_selection, feature_selection, kernel_ridge
-#from sklearn.preprocessing import PolynomialFeatures
-#import pandas as pd
-#import numpy as np
-#
-#
-#message = 'reduced_dims_on_scaled_pca'
-#X_train_dict[message] 
-#
-#iso_forest_estimator = ensemble.IsolationForest()
-#iso_forest_grid = {'contamination':[0.1, 0.2, 0.25, 0.3]}
-#grid_search_plot_models_outliers(iso_forest_estimator, iso_forest_grid, X_train_dict[message])
-#
-#
-#
-#
-#
-#
-#
-#
+
+
+
+
+
+
+
 
 
 #for perplexity in range(20,10000, 100):
@@ -2043,6 +2053,24 @@ X_train_dict[message] = X_train
 
 
 
+
+#
+#
+#message = 'reduced_dims_on_unscaled_tsne'
+#X_train = X_train_dict['original'].copy(deep = True)
+#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 3, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, message = message)
+#X_train_dict[message] = X_train
+
+#message = 'reduced_dims_on_scaled_tsne_cuda'
+#X_train = X_train_dict['scaled'].copy(deep = True)
+#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne_cuda', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
+#X_train_dict[message] = X_train
+
+
+#message = 'reduced_dims_on_scaled_tsne'
+#X_train = X_train_dict['scaled'].copy(deep = True)
+#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
+#X_train_dict[message] = X_train
 
 
 
