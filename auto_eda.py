@@ -6,6 +6,9 @@ Created on Mon Feb 11 16:37:03 2019
 @author: pt
 """
 
+
+# To Do: maek 
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,6 +35,7 @@ import os
 import pydot
 from sklearn.manifold import Isomap
 from sklearn import ensemble
+from sklearn import feature_selection
 
 
 
@@ -46,6 +50,7 @@ from missingpy import KNNImputer, MissForest
 
 
 
+
 global_problem_type = 'regression'
 auto_generated_data_df_dropped = pd.DataFrame()
 
@@ -53,11 +58,17 @@ auto_generated_data_df_dropped = pd.DataFrame()
 def log_rmse(y_orig, y_pred):
     return math.sqrt(metrics.mean_squared_log_error(y_orig,y_pred) )
 
-def drop_and_log_column(df, column_name = None, reason = None):
+def drop_and_log_column(df, column_name = None, reason = None):    
     auto_generated_data_df_dropped[column_name + '__' + reason] = df[column_name].copy(deep=True)
     df.drop(columns = column_name, inplace = True)
     
-        
+
+def drop_and_log_column_at_index(df, index = None, reason = None): 
+    column_name = df.columns[index]
+    auto_generated_data_df_dropped[column_name + '__' + reason] = df[column_name].copy(deep=True)
+    df.drop(index = column_name, inplace = True)
+    
+
     
 
 if global_problem_type == 'categorical':
@@ -69,9 +80,11 @@ if global_problem_type == 'categorical':
     file_path = os.path.join(directory, 'pass_nationalities.csv')
     name_prism = pd.read_csv(file_path, index_col = False)
     name_prism_train = name_prism[:train.shape[0]]
-    train['nationality'] = name_prism_train['Nationality']
+    train['nationality'] = name_prism_train['Nationality']    
     
     target_column = 'Survived'
+    
+    exclude_from_ohe = ['Pclass', 'SibSp', 'Parch' ]
 #    train.drop[]
     
     
@@ -83,6 +96,7 @@ else:
     target_column = 'SalePrice'
     global_scoring = metrics.make_scorer(log_rmse, greater_is_better=False)
 #    global_scoring = 'neg_mean_squared_log_error'
+    exclude_from_ohe = None
 
     
     
@@ -1033,7 +1047,7 @@ for column in auto_generated_data_df.columns:
 
         else:
             print(column_str, 'Too little data for continuous')
-            auto_generated_data_df_dropped = auto_generated_data_df[column]
+            drop_and_log_column(auto_generated_data_df[column])
             
             
 #To Do: These need to be added to auto_generated_data_df_dropped
@@ -1124,19 +1138,21 @@ for column in auto_generated_hash_df.columns:
     
 
 
-def one_hot(df, exclude_from_ohe = []):
+def one_hot(df, exclude_from_ohe = None):
     cat_columns = df.columns
     
-    columns_to_one_hot = []
+    
     
     df_excluded_from_one_hot = pd.DataFrame()
     
     df_after_one_hot = pd.DataFrame()
 
-    if len(exclude_from_ohe) == 0:
-        df_after_one_hot = pd.get_dummies(df, columns= columns_to_one_hot )
+    if exclude_from_ohe == None:
+        df_after_one_hot = pd.get_dummies(df, columns = df.columns)
     
     else:         
+        columns_to_one_hot = []
+        
         for column_name in cat_columns:
             if column_name in exclude_from_ohe:
                 df_excluded_from_one_hot[column_name] = df[column_name].copy(deep = True)
@@ -1211,12 +1227,12 @@ def show_heatmap(X_train, message = '', x_label = '', y_label = ''):
 
 
 
-
                     
 
+
+
 def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_column_from_ohe):   
-    
-        
+       
     #label encode categorical
     
     categorical_df_label_encoded =  label_encoder(categorical_df, strategy = 'keep_missing_as_nan')
@@ -1225,6 +1241,7 @@ def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_c
     cont_columns = continuous_df.columns
     
     joint_df = categorical_df_label_encoded.join( continuous_df, how = 'outer')      
+    
     
     if show_plots:
         show_heatmap(joint_df, message = 'heatmap_before_imputation')
@@ -1264,16 +1281,45 @@ def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_c
         warn('incorrect imputer')
         raise Exception('Incorrect imputer specified. Use None for no imputation')
     
+    
+    
+        
+    # remove features with zero varience
+    selector = feature_selection.VarianceThreshold()
+    selector.fit(imputed_df)
+    
+    supports = selector.get_support()
+    indices_with_zero_variance = np.where(supports == False)
+    indices_with_zero_variance = list(indices_with_zero_variance[0])    
+    columns_to_drop = imputed_df.columns[indices_with_zero_variance]
+    
+    
+    cat_columns_list_after_feature_removal = list(cat_columns)
+    cont_columns_list_after_feature_removal = list(cont_columns)
+    
+    
+    for column in columns_to_drop:
+        drop_and_log_column(imputed_df, column, '_Zero variance after imputation')
+        warn(str(column) + ' Dropped column due to zero varience after imputation. Maybe its better to make missing values as unknown')
+        
+        if column in cat_columns_list_after_feature_removal:
+            cat_columns_list_after_feature_removal.remove(column)
+        elif column in cont_columns_list_after_feature_removal:
+            cont_columns_list_after_feature_removal.remove(column)
+    
+    
     if show_plots:
         show_heatmap(imputed_df, message = 'heatmap_after_imputation')
         
         
-
+    
+    
+    
     
     if enable_ohe:
         #the cat and cont are seperated and then joint so that the order is preserved after one hot
-        imputed_cat_df = imputed_df[list(cat_columns)]
-        imputed_cont_df = imputed_df[list(cont_columns)]
+        imputed_cat_df = imputed_df[list(cat_columns_list_after_feature_removal)]
+        imputed_cont_df = imputed_df[list(cont_columns_list_after_feature_removal)]
         
         
         #one hot categorical columns    
@@ -1301,7 +1347,7 @@ combined_continuous_df = combined_continuous_df.join(train_continuous,how = 'out
 combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_continuous,how = 'outer')
 
 
-exclude_from_ohe = ['Pclass', 'SibSp', 'Parch' ]
+
 
 show_plots = True
 X_train = pre_processing(combined_categorical_df, combined_continuous_df, imputer = 'random_forest', enable_ohe = True, exclude_column_from_ohe = exclude_from_ohe)
@@ -2208,6 +2254,16 @@ X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamina
 #
 #
 #
+
+
+        
+#def drop_and_log_multi_columns_by_indices(df, indices = None, reason = None): 
+#    df_dropped = df.iloc[:,indices].copy(deep = True)
+#    df_dropped = df_dropped.add_suffix('_' + reason)
+#    
+#    auto_generated_data_df_dropped = auto_generated_data_df_dropped.join(df_dropped, how = 'right')
+#    
+#    df.drop(index = indices, inplace = True)
 
 
 
