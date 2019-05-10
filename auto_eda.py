@@ -94,8 +94,8 @@ else:
     file_path = os.path.join(directory, 'train.csv')
     train = pd.read_csv(file_path, index_col = False)
     target_column = 'SalePrice'
-    global_scoring = metrics.make_scorer(log_rmse, greater_is_better=False)
-#    global_scoring = 'neg_mean_squared_log_error'
+#    global_scoring = metrics.make_scorer(log_rmse, greater_is_better=False)
+    global_scoring = 'neg_mean_squared_log_error'
     exclude_from_ohe = None
 
     
