@@ -47,7 +47,17 @@ from missingpy import KNNImputer, MissForest
 
 
 global_problem_type = 'regression'
+auto_generated_data_df_dropped = pd.DataFrame()
 
+
+def log_rmse(y_orig, y_pred):
+    return math.sqrt(metrics.mean_squared_log_error(y_orig,y_pred) )
+
+def drop_and_log_column(df, column_name = None, reason = None):
+    auto_generated_data_df_dropped[column_name + '__' + reason] = df[column_name].copy(deep=True)
+    df.drop(columns = column_name, inplace = True)
+    
+        
     
 
 if global_problem_type == 'categorical':
@@ -61,7 +71,6 @@ if global_problem_type == 'categorical':
     name_prism_train = name_prism[:train.shape[0]]
     train['nationality'] = name_prism_train['Nationality']
     
-    
     target_column = 'Survived'
 #    train.drop[]
     
@@ -72,6 +81,21 @@ else:
     file_path = os.path.join(directory, 'train.csv')
     train = pd.read_csv(file_path, index_col = False)
     target_column = 'SalePrice'
+    global_scoring = metrics.make_scorer(log_rmse, greater_is_better=False)
+#    global_scoring = 'neg_mean_squared_log_error'
+
+    
+    
+
+
+if global_problem_type == 'classification':
+    drop_and_log_column(train, 'PassengerId', 'manually dropped - unique identifier')
+elif global_problem_type == 'regression':
+    df = drop_and_log_column(train, 'Id', 'manually dropped - unique identifier')
+    
+
+
+    
     
     
 results_dir = os.path.join(directory + '/results')    
@@ -91,7 +115,6 @@ target_df = train[target_column].copy(deep = True)
 
 
 
-auto_generated_data_df_dropped = pd.DataFrame()
 
 log_warnings = set()
 
@@ -392,10 +415,7 @@ def warn(w):
     
 
 
-def drop_and_log_column(df, column_name = None, reason = None):
-    auto_generated_data_df_dropped[column_name + '__' + reason] = df[column_name].copy(deep=True)
-    df.drop(columns = column_name, inplace = True)
-    
+
 
 def cont_preprocess(df_original, missing_data_drop_threshold = None, imputer = 'SimpleImputer', si_strategy = 'mean', si_fill_value = np.finfo(np.float64).min):
     
@@ -643,11 +663,7 @@ class plotter:
 
 for idx, column in enumerate(train.columns):
     print()
-    
 
-    if column == 'SaleCondition':
-        print('debug message')
-        
     if column == target_column:
         continue
         
@@ -746,8 +762,6 @@ for idx, column in enumerate(train.columns):
 plt.show()
 print()
 print()
-
-
 
 
 
@@ -1336,11 +1350,7 @@ X_train = pre_processing(combined_categorical_df, combined_continuous_df, impute
 
     
 
-if global_problem_type == 'classification':
-    drop_and_log_column(X_train, 'PassengerId', 'manually dropped - unique identifier')
-elif global_problem_type == 'regression':
-    drop_and_log_column(X_train, 'Id', 'manually dropped - unique identifier')
-    
+
 
 
 X_train_dict['original'] = X_train.copy(deep = True)
@@ -1629,8 +1639,7 @@ def ada_boost(X_train, y_train, message = ''):
         else:
             base_classifier = tree.DecisionTreeRegressor()  
             ada_boost_dt = ensemble.AdaBoostRegressor(base_classifier)
-            scoring = metrics.make_scorer(rmse) 
-            scoring = 'neg_mean_squared_log_error'
+            scoring = global_scoring
             
             
 
@@ -1754,7 +1763,11 @@ def plot3d(x,y,z, color='rgb(204, 204, 204)', message = 'Title', x_label = '', y
 def plot2d(x,y, threshold = '', color = 'rgb(255, 215, 0)', message = 'Title', x_label = '', y_label = ''):
     if threshold != '':
         threshold = threshold + 1
+        
+        if threshold > len(x):
+            threshold  = len(x)
         color = list(np.full(threshold, 1)) + list(np.full(y.shape[0] - threshold, 0))
+        
         
     trace1 = go.Scatter(
         x = x,    
@@ -1853,12 +1866,12 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
             if n_components > df.shape[1]:
                 warn('PCA: n_components > feature columns in data. Setting n_components = features in data')
                 n_components = df.shape[1]
-            pca_cumulative_ratio_threshold = 1.0
+            pca_cumulative_ratio_threshold = .999999
         elif pca_cumulative_ratio_threshold != None and n_components == None :
             n_components = df.shape[1]
         else:
             n_components = df.shape[1]
-            pca_cumulative_ratio_threshold = 1.0
+            pca_cumulative_ratio_threshold = .999999
         
         assert (pca_cumulative_ratio_threshold >= 0 and pca_cumulative_ratio_threshold <= 1)
         
@@ -1870,8 +1883,10 @@ def reduce_dimentions(df, target , algorithm , pca_cumulative_ratio_threshold = 
         lpca.explained_variance_ratio_        
         plot_series(lpca.explained_variance_ratio_, message = 'PCA: explained_variance_ratio_')
         cumulative_variance = np.cumsum(lpca.explained_variance_ratio_)        
-        index_of_pca_first_redundant_pca_axis = np.searchsorted(cumulative_variance, pca_cumulative_ratio_threshold, side = 'right') 
+        index_of_pca_first_redundant_pca_axis = np.searchsorted(cumulative_variance, pca_cumulative_ratio_threshold, side = 'left') 
 
+        print('>>>>>>>' , index_of_pca_first_redundant_pca_axis)
+        
         if max(cumulative_variance) >= pca_cumulative_ratio_threshold:
             print('Cumulative Varience Threshold of ', pca_cumulative_ratio_threshold, '  achieved by PC axis at index ', index_of_pca_first_redundant_pca_axis, ' where last PC index is ', df.shape[1]- 1  )
         else:
