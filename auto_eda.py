@@ -573,12 +573,7 @@ def get_equally_spaced_non_zero_floats_in_range(start = 0, stop =1, total_number
 
 
 
-#to do: only categorical and unresolved seem to be used. delete extra entries. or have continuous entry
 
-column_properties_df = pd.DataFrame(columns = ['categorical', 'text', 'unresolved', 'incomplete', 'imputed', 'error'])
-
-train_categorical = pd.DataFrame()
-train_continuous = pd.DataFrame()
  
 
 class plotter:
@@ -673,105 +668,146 @@ class plotter:
 
 
 
+def seperate_cat_cont_columns(train):
 
+    #to do: only categorical and unresolved seem to be used. delete extra entries. or have continuous entry
+    column_properties_df = pd.DataFrame(columns = ['categorical', 'continuous', 'text', 'unresolved', 'incomplete', 'imputed', 'error'])
 
-for idx, column in enumerate(train.columns):
-    print()
-
-    if column == target_column:
-        continue
-        
-    try:
-        #column_properties_df.loc[column, 'Index'] = column
-        column_properties_df.loc[column, 'error'] = False
-        group_obj = train.groupby(column)
-        group_count_in_column = group_obj.count().shape[0]
-        
-        categorical = False
-        
-        log_column_str = 'Log: >>>>> ' + '[' +  column + '] '
-        log_target_str = '[' + target_column +']'
-        
-        if group_count_in_column <= max_groups_in_categorical_data:
-            print('Log: [', column,'] is categorical. Unique groups in category: ', group_count_in_column)
-            categorical = True
-            column_properties_df.loc[column, 'categorical'] = True
+    for idx, column in enumerate(train.columns):
+        print()
+    
+        if column == target_column:
+            continue
             
-        if categorical:
-#            if train[column].dtypes == 'O':
-#                print(log_column_str, ' Type is Object. Applying label encoding ')
-#                labelencoder = LabelEncoder()
-#                labelencoder.fit_transform(train[column])
-#                train[column] = labelencoder.transform(train[column])
-                     
-            #try to convert data to numeric if possible
-            try:
-                temp_column = pd.to_numeric(train[column])               
-                     
-                if column != target_column:
-                    if show_plots:
-#                        print(log_column_str, 'vs target ', log_target_str)
-#                        plt.figure()
-#                        sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
-#                        plt.show()
-                        if global_problem_type == 'categorical':
-                            plotter.plot_cat_cat(x=train[column] , y = y_train)  
-                            
-                        elif global_problem_type == 'regression':
-                            plotter.plot_cont_cat(x = train[column] , y  = y_train)  
-                        else:
-                            raise Exception('target is neither categorical nor regression')
-                            
-    #                sns.factorplot(x="Embarked", hue="Survived", data=titanic_train, kind="count", height=6)
-                    train_categorical[column] = temp_column                
-
-                    
-            except Exception:
+        try:
+            #column_properties_df.loc[column, 'Index'] = column
+            column_properties_df.loc[column, 'error'] = False
+            group_obj = train.groupby(column)
+            group_count_in_column = group_obj.count().shape[0]
+            
+            categorical = False
+            
+            log_column_str = 'Log: >>>>> ' + '[' +  column + '] '
+            log_target_str = '[' + target_column +']'
+            
+            if group_count_in_column <= max_groups_in_categorical_data:
+                print('Log: [', column,'] is categorical. Unique groups in category: ', group_count_in_column)
+                categorical = True
+                column_properties_df.loc[column, 'categorical'] = True
                 
-                column_properties_df.loc[column, 'unresolved'] = True
-                print(log_column_str + 'is alphanumeric. Added for auto processing')
-                pass     
-                    
-#                else:
-#                    y_train = temp_column                  
-#                
-                
-        else:    
-            if train[column].dtypes != 'O' and column != target_column:        
+            if categorical:
+    #            if train[column].dtypes == 'O':
+    #                print(log_column_str, ' Type is Object. Applying label encoding ')
+    #                labelencoder = LabelEncoder()
+    #                labelencoder.fit_transform(train[column])
+    #                train[column] = labelencoder.transform(train[column])
+                         
+                #try to convert data to numeric if possible
                 try:
+                    temp_column = pd.to_numeric(train[column])               
+                         
+                    if column != target_column:
                         if show_plots:
-#                            plt.figure()
-#                            sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()  
-#                            plt.show()
-                            
-#                            plotter.plot_cat_cont(train, column , target_column)
+    #                        print(log_column_str, 'vs target ', log_target_str)
+    #                        plt.figure()
+    #                        sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
+    #                        plt.show()
                             if global_problem_type == 'categorical':
-                                plotter.plot_cat_cont(x = train[column] , y  = y_train) 
+                                plotter.plot_cat_cat(x=train[column] , y = y_train)  
                                 
                             elif global_problem_type == 'regression':
-                                plotter.plot_cont_cont(x = train[column] , y  = y_train) 
+                                plotter.plot_cont_cat(x = train[column] , y  = y_train)  
                             else:
                                 raise Exception('target is neither categorical nor regression')
-                            
-                            
-                            
-                        column_properties_df.loc[column, 'categorical'] = False
+                                
+        #                sns.factorplot(x="Embarked", hue="Survived", data=titanic_train, kind="count", height=6)
+#                        train_categorical[column] = temp_column                
+    
                         
-                        train_continuous[column] = train[column]
+                except Exception:
+                    
+                    column_properties_df.loc[column, 'unresolved'] = True
+                    print(log_column_str + 'is alphanumeric. Added for auto processing')
+                    pass     
+                        
+    #                else:
+    #                    y_train = temp_column                  
+    #                
+                    
+            else:    
+                if train[column].dtypes != 'O' and column != target_column:        
+                    try:
+                            if show_plots:
+    #                            plt.figure()
+    #                            sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()  
+    #                            plt.show()
+                                
+    #                            plotter.plot_cat_cont(train, column , target_column)
+                                if global_problem_type == 'categorical':
+                                    plotter.plot_cat_cont(x = train[column] , y  = y_train) 
+                                    
+                                elif global_problem_type == 'regression':
+                                    plotter.plot_cont_cont(x = train[column] , y  = y_train) 
+                                else:
+                                    raise Exception('target is neither categorical nor regression')
+                                
+                                
+                                
+                            column_properties_df.loc[column, 'categorical'] = False
+                            
+#                            train_continuous[column] = train[column]
+                            column_properties_df.loc[column, 'continuous'] = True
+    
+                    except:
+                            warn('Log: >>>>> Unknown error: Cannot make graph for column: ' + column)
+                            column_properties_df.loc[column, 'error'] = True
+    
+                else:
+                    print(log_column_str , 'Cannot make graph for continous column and object. Will be processed as text later')
+                    column_properties_df.loc[column, 'unresolved'] = True
+    
+    
+        except:
+            print(log_column_str , 'Preprocessing failed. Proceeding to next column')
+        
+#    results = {'column_properties_df' : column_properties_df,  'train_categorical': train_categorical, 'train_continuous' : train_continuous }    
+#    results = pd.DataFrame.from_dict(results)
+    return column_properties_df
+        
+
+#column_properties_df, train_categorical, train_continuous = seperate_cat_cont_columns(train)
+#results = seperate_cat_cont_columns(train)
 
 
-                except:
-                        warn('Log: >>>>> Unknown error: Cannot make graph for column: ' + column)
-                        column_properties_df.loc[column, 'error'] = True
 
-            else:
-                print(log_column_str , 'Cannot make graph for continous column and object. Will be processed as text later')
-                column_properties_df.loc[column, 'unresolved'] = True
+# using different pool to save overhead
+from concurrent.futures import ProcessPoolExecutor
+
+def parallel_feature_calculation_ppe(df, function, partitions=10, processes=24):
+    # calculate features in paralell by splitting the dataframe into partitions and using paralell processes
+    
+    df_split = np.array_split(df, partitions, axis=1)  # split dataframe into partitions column wise
+    
+    with ProcessPoolExecutor(processes) as pool:     
+#        df = pool.map(function, df_split)
+        df = pd.concat(pool.map(function, df_split))
+    
+    return df
+
+column_properties_df = parallel_feature_calculation_ppe(train, function = seperate_cat_cont_columns, partitions=10, processes=24)
+#column_properties_df = column_properties_df.fillna(False)
+
+mask = column_properties_df['categorical'] == True 
+names = column_properties_df[mask].index
+names = list(names.values)
+train_categorical = train[names]
 
 
-    except:
-        print(log_column_str , 'Preprocessing failed. Proceeding to next column')
-            
+mask = column_properties_df['continuous'] == True 
+names = column_properties_df[mask].index
+names = list(names.values)
+train_continuous = train[names]
+        
 #print('Log: ' , unresolved_columns, 'Could not be resolved as they were continous and of type object. These will be taken as string')       
 plt.show()
 print()
