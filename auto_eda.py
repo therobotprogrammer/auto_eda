@@ -142,6 +142,9 @@ log_warnings = set()
 
 
 show_plots = False
+verify_parallel_execution = True
+
+
 
 
 train.info()
@@ -679,13 +682,17 @@ def seperate_cat_cont_columns(train):
     
         if column == target_column:
             continue
-         
+        
+        
         try:
             #This is needed because in regular passing of dataframe, it is passed as int64
             #but when passed by parallel processing library, it gets changed to Object
             #this step changes it back to int64
             train[column] = pd.to_numeric(train[column])
-        except: pass 
+            is_numeric = True
+            
+        except: 
+            is_numeric = False
        
         
        
@@ -703,7 +710,6 @@ def seperate_cat_cont_columns(train):
             if group_count_in_column <= max_groups_in_categorical_data:
                 print('Log: [', column,'] is categorical. Unique groups in category: ', group_count_in_column)
                 categorical = True
-                column_properties_df.loc[column, 'categorical'] = True
                 
             if categorical:
     #            if train[column].dtypes == 'O':
@@ -713,9 +719,10 @@ def seperate_cat_cont_columns(train):
     #                train[column] = labelencoder.transform(train[column])
                          
                 #try to convert data to numeric if possible
-                try:
-                    temp_column = pd.to_numeric(train[column])               
-                         
+                if is_numeric:
+#                    temp_column = pd.to_numeric(train[column])               
+                    column_properties_df.loc[column, 'categorical'] = True
+
                     if column != target_column:
                         if show_plots:
     #                        print(log_column_str, 'vs target ', log_target_str)
@@ -734,7 +741,7 @@ def seperate_cat_cont_columns(train):
 #                        train_categorical[column] = temp_column                
     
                         
-                except Exception:
+                else:
                     
                     column_properties_df.loc[column, 'unresolved'] = True
                     print(log_column_str + 'is alphanumeric. Added for auto processing')
@@ -745,7 +752,7 @@ def seperate_cat_cont_columns(train):
     #                
                     
             else:    
-                if train[column].dtypes != 'O' and column != target_column:     
+                if is_numeric and column != target_column:     
 #                    column_properties_df.loc[column, 'categorical'] = False
                     
 #                            train_continuous[column] = train[column]
@@ -821,9 +828,14 @@ def serial_apply(df_input, function):
     
 
 column_properties_df = parallel_feature_calculation_ppe(train, function = seperate_cat_cont_columns, partitions=24, processes=24)
-column_properties_df_serial = seperate_cat_cont_columns(train)
 
-column_properties_df.equals(column_properties_df_serial)
+
+
+if verify_parallel_execution == True:
+    
+    column_properties_df_serial = seperate_cat_cont_columns(train)
+
+    assert( column_properties_df.equals(column_properties_df_serial) )
 
 
 #column_properties_df = column_properties_df.fillna(False)
@@ -866,6 +878,7 @@ column_split_mapper_dict = {}
 
 # Clean text columns
 auto_generated_data_df = pd.DataFrame()
+
 for index, row in column_properties_df.iterrows():
  
     if index == 'SalePrice':
