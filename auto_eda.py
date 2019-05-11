@@ -675,10 +675,20 @@ def seperate_cat_cont_columns(train):
 
     for idx, column in enumerate(train.columns):
         print()
+        
     
         if column == target_column:
             continue
-            
+         
+        try:
+            #This is needed because in regular passing of dataframe, it is passed as int64
+            #but when passed by parallel processing library, it gets changed to Object
+            #this step changes it back to int64
+            train[column] = pd.to_numeric(train[column])
+        except: pass 
+       
+        
+       
         try:
             #column_properties_df.loc[column, 'Index'] = column
             column_properties_df.loc[column, 'error'] = False
@@ -735,7 +745,12 @@ def seperate_cat_cont_columns(train):
     #                
                     
             else:    
-                if train[column].dtypes != 'O' and column != target_column:        
+                if train[column].dtypes != 'O' and column != target_column:     
+#                    column_properties_df.loc[column, 'categorical'] = False
+                    
+#                            train_continuous[column] = train[column]
+                    column_properties_df.loc[column, 'continuous'] = True                   
+                    
                     try:
                             if show_plots:
     #                            plt.figure()
@@ -753,10 +768,7 @@ def seperate_cat_cont_columns(train):
                                 
                                 
                                 
-                            column_properties_df.loc[column, 'categorical'] = False
-                            
-#                            train_continuous[column] = train[column]
-                            column_properties_df.loc[column, 'continuous'] = True
+
     
                     except:
                             warn('Log: >>>>> Unknown error: Cannot make graph for column: ' + column)
@@ -782,19 +794,38 @@ def seperate_cat_cont_columns(train):
 
 # using different pool to save overhead
 from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool
 
-def parallel_feature_calculation_ppe(df, function, partitions=10, processes=24):
+
+
+def parallel_feature_calculation_ppe(df_input, function, partitions=24, processes=24):
     # calculate features in paralell by splitting the dataframe into partitions and using paralell processes
     
-    df_split = np.array_split(df, partitions, axis=1)  # split dataframe into partitions column wise
+    df_split = np.array_split(df_input, partitions, axis=1)  # split dataframe into partitions column wise
     
     with ProcessPoolExecutor(processes) as pool:     
-#        df = pool.map(function, df_split)
-        df = pd.concat(pool.map(function, df_split))
+        df_output = pd.concat(pool.map(function, df_split))
+        
+##   pool method    
+#    pool = Pool(processes)
+#    df_output = pd.concat(pool.map(function, df_split))
+#    pool.close()
+#    pool.join()
     
-    return df
+    return df_output
 
-column_properties_df = parallel_feature_calculation_ppe(train, function = seperate_cat_cont_columns, partitions=10, processes=24)
+def serial_apply(df_input, function):
+    df_output = df_input.apply(function)
+    return df_output
+    
+    
+
+column_properties_df = parallel_feature_calculation_ppe(train, function = seperate_cat_cont_columns, partitions=24, processes=24)
+column_properties_df_serial = seperate_cat_cont_columns(train)
+
+column_properties_df.equals(column_properties_df_serial)
+
+
 #column_properties_df = column_properties_df.fillna(False)
 
 mask = column_properties_df['categorical'] == True 
