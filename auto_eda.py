@@ -840,16 +840,20 @@ if verify_parallel_execution == True:
 
 #column_properties_df = column_properties_df.fillna(False)
 
-mask = column_properties_df['categorical'] == True 
-names = column_properties_df[mask].index
-names = list(names.values)
-train_categorical = train[names]
+
+def extract_df_from_properties_df(source_df, properties_df, data_to_extract):
+    mask = properties_df[data_to_extract] == True 
+    names = properties_df[mask].index
+    names = list(names.values)
+    extracted_df = source_df[names]
+    return extracted_df
 
 
-mask = column_properties_df['continuous'] == True 
-names = column_properties_df[mask].index
-names = list(names.values)
-train_continuous = train[names]
+train_categorical = extract_df_from_properties_df(train, column_properties_df, data_to_extract = 'categorical' )
+train_continuous = extract_df_from_properties_df(train, column_properties_df, data_to_extract = 'continuous' )
+train_unresolved = extract_df_from_properties_df(train, column_properties_df, data_to_extract = 'unresolved' )
+
+
         
 #print('Log: ' , unresolved_columns, 'Could not be resolved as they were continous and of type object. These will be taken as string')       
 plt.show()
@@ -878,6 +882,13 @@ column_split_mapper_dict = {}
 
 # Clean text columns
 auto_generated_data_df = pd.DataFrame()
+
+
+
+#def clean_data(df):
+    
+
+
 
 for index, row in column_properties_df.iterrows():
  
@@ -1264,7 +1275,13 @@ def show_heatmap(X_train, message = '', x_label = '', y_label = ''):
     
 #    corr_df = pd.DataFrame(corr, columns = X_train.columns)
 
-    trace = go.Heatmap( z=corr_df, x = corr_df.columns , y = corr_df.columns , colorscale='Viridis')
+#    labels = list(corr_df.columns.values)
+#    trace = go.Heatmap( z=corr_df, x = labels , y = labels , colorscale='Viridis')
+
+    
+    trace = go.Heatmap( z = corr_df.values.tolist(), x = corr_df.columns , y = corr_df.columns , colorscale='Viridis')
+#    trace = go.Heatmap( z = corr_df.values.tolist() , colorscale='Viridis')
+    
     
     traces = [trace]
     
@@ -1285,8 +1302,10 @@ def show_heatmap(X_train, message = '', x_label = '', y_label = ''):
                     titlefont=dict(
                                     family='Courier New, monospace',
                                     size=18,
-                                    color='#7f7f7f'
-                                )
+                                    color='#7f7f7f',
+                                    
+                                ),
+                    tickmode = 'linear'
                     ),
                     
         yaxis=dict(
@@ -1294,8 +1313,10 @@ def show_heatmap(X_train, message = '', x_label = '', y_label = ''):
                     titlefont=dict(
                                     family='Courier New, monospace',
                                     size=18,
-                                    color='#7f7f7f'
-                                )
+                                    color='#7f7f7f',
+                                ),
+                    tickmode = 'linear',
+                    autorange='reversed'
                     )
     )
         
