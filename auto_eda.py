@@ -37,6 +37,9 @@ from sklearn.manifold import Isomap
 from sklearn import ensemble
 from sklearn import feature_selection
 
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool
+
 
 
 
@@ -47,6 +50,9 @@ import plotly.graph_objs as go
 
 
 from missingpy import KNNImputer, MissForest
+import multiprocessing
+
+
 
 
 
@@ -131,20 +137,11 @@ target_df = train[target_column].copy(deep = True)
 
 
 log_warnings = set()
-
-
-#from sklearn_pandas import CategoricalImputer
-
-### To Do: Convert comma to space
-
-
-   
-
-
 show_plots = False
-verify_parallel_execution = True
 
-
+global_cores = multiprocessing.cpu_count()      
+global_verify_parallel_execution = True
+global_debug_mode = False
 
 
 train.info()
@@ -678,6 +675,7 @@ def seperate_cat_cont_columns(train):
 
     for idx, column in enumerate(train.columns):
         print()
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',train.columns)
         
     
         if column == target_column:
@@ -789,8 +787,10 @@ def seperate_cat_cont_columns(train):
         except:
             print(log_column_str , 'Preprocessing failed. Proceeding to next column')
         
-#    results = {'column_properties_df' : column_properties_df,  'train_categorical': train_categorical, 'train_continuous' : train_continuous }    
-#    results = pd.DataFrame.from_dict(results)
+    #here transpose is used because the parallise function splits data column wise and therefore expects results column wise. 
+    #hense it concatenates data column wise. Where as in this, each coulmn generates a dataframe with the same rows.
+    # a better approach would be to use rows index as category, continuous etc to begin with. 
+    column_properties_df = column_properties_df.transpose() 
     return column_properties_df
         
 
@@ -799,43 +799,161 @@ def seperate_cat_cont_columns(train):
 
 
 
-# using different pool to save overhead
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Pool
+#                pool method    
+#                pool = Pool(processes)
+#                df_output = pd.concat(pool.map(function, df_split))
+#                pool.close()
+#                pool.join()   
 
 
+from funcy import join
 
-def parallel_feature_calculation_ppe(df_input, function, partitions=24, processes=24):
+
+def parallise(df_input, function, partitions=None, processes=None):
     # calculate features in paralell by splitting the dataframe into partitions and using paralell processes
-    
-    df_split = np.array_split(df_input, partitions, axis=1)  # split dataframe into partitions column wise
-    
-    with ProcessPoolExecutor(processes) as pool:     
-        df_output = pd.concat(pool.map(function, df_split))
+    if partitions == None:        
+        partitions = global_cores        
+    if processes == None:        
+        processes = global_cores
+       
         
-##   pool method    
-#    pool = Pool(processes)
-#    df_output = pd.concat(pool.map(function, df_split))
-#    pool.close()
-#    pool.join()
+    if global_verify_parallel_execution == True and global_debug_mode == True:
+        warn('Parallel execution is not possible in debug mode. Parallel execution will not be performed.')
+        
     
-    return df_output
+    if global_debug_mode == True:
+        compiled_result_serial = function(df_input)
+        return compiled_result_serial
+
+    else:
+            df_split = np.array_split(df_input, partitions, axis=1)  # split dataframe into partitions column wise
+            
+            
+            with ProcessPoolExecutor(processes) as pool:     
+#                df_output_parallel = pd.concat(pool.map(function, df_split), axis = 1)
+                results_generator = pool.map(function, df_split)
+                
+#                temp_splits = []
+#                for split in results_generator:
+#                    temp_splits.append(split)
+                
+                results_as_splits = list(results_generator)
+                
+                
+                for value in results_generator:  
+                    print(value.shape)  
+                
+            
+            
+            compiled_result_parallel = [] 
+            
+            if isinstance(results_as_splits[0], tuple):                
+                
+                items_per_split =  len(results_as_splits[0])                
+                
+                               
+                
+                for index in range(0, items_per_split):
+                    splits_to_concatenate = []
+    
+                    for split in results_as_splits:
+                            #If multiple values are returned, then they are a tuple. They have to be accessed as index. 
+                        splits_to_concatenate.append(split[index])                            
+                   
+                    #concatenate based on datatype
+                    if isinstance(splits_to_concatenate[0], pd.DataFrame):
+
+                        #Save list of indexes
+#                        df_indexes = splits_to_concatenate[0].index    
+                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1, ignore_index = True) 
+                        
+                        #restore index. This is needed because indexes were ignored. 
+                        #Indexes had to be ignored to join dataframes with default numbers as indexes.
+                        #such dataframes were getting joined row wise as well as column wise
+                        #setting axis did not help, because it would break situations where indexes were 
+                        #manully set labels. 
+                        
+#                        joined_data_df.index = df_indexes
+                        compiled_result_parallel.append(joined_data_df)                        
+                        
+                        
+                        
+#                        compiled_result_parallel.append( pd.concat(splits_to_concatenate, axis = 0, ignore_index = True ) 
+                        
+                    else:
+                        joined_data = join(splits_to_concatenate)
+                        compiled_result_parallel.append(joined_data)
+                            
+                compiled_result_parallel = tuple(compiled_result_parallel)
+ 
+    
+            else:
+                    # If a tuple was not returned, then a was returned by each split
+                    splits_to_concatenate = []
+                    
+                    for split in results_as_splits:
+                            
+                        splits_to_concatenate.append(split)                            
+                   
+                    #concatenate based on datatype
+                    if isinstance(splits_to_concatenate[0], pd.DataFrame):
+                        
+                        #Save list of indexes
+#                        df_indexes = splits_to_concatenate.index    
+                        
+                        #here axis = 0 because this is only one dataframe not a tuple
+                        #here the generator throws everything row wise
+                        #therefore row wise concatenation is needed
+                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1) 
+                        
+                        #restore index. This is needed because indexes were ignored. 
+                        #Indexes had to be ignored to join dataframes with default numbers as indexes.
+                        #such dataframes were getting joined row wise as well as column wise
+                        #setting axis did not help, because it would break situations where indexes were 
+                        #manully set labels. 
+                        
+#                        joined_data_df.index = df_indexes
+                        compiled_result_parallel.append(joined_data_df)                
+                    else:
+                        joined_data = join(splits_to_concatenate)
+                        compiled_result_parallel.append(joined_data)
+                        
+                    #since original function returned only one item, 
+                    #this function also returns only 1 item and not a tuple of items
+                    
+                    compiled_result_parallel = compiled_result_parallel[0]
+                        
+    
+            if global_verify_parallel_execution == True:
+                compiled_result_serial = function(df_input)
+                
+                if isinstance(compiled_result_serial, tuple):
+                    for index, serial_item in enumerate(compiled_result_serial) :
+                        if isinstance(compiled_result_serial, pd.DataFrame) :
+                            assert serial_item.equals( compiled_result_parallel[index] ), 'Serial and Parallel compution do not match'
+                        
+                        else:
+                            assert serial_item == compiled_result_parallel[index] , 'Serial and Parallel compution do not match'
+                            
+                else:
+                        if isinstance(compiled_result_serial, pd.DataFrame) :
+                            assert compiled_result_serial.equals( compiled_result_parallel ), 'Serial and Parallel compution do not match'
+                        
+                        else:
+                            assert compiled_result_serial == compiled_result_parallel , 'Serial and Parallel compution do not match'                     
+    
+    return compiled_result_parallel
+
+
 
 def serial_apply(df_input, function):
     df_output = df_input.apply(function)
     return df_output
-    
-    
-
-column_properties_df = parallel_feature_calculation_ppe(train, function = seperate_cat_cont_columns, partitions=24, processes=24)
 
 
 
-if verify_parallel_execution == True:
-    
-    column_properties_df_serial = seperate_cat_cont_columns(train)
-
-    assert( column_properties_df.equals(column_properties_df_serial) )
+column_properties_df = parallise(train, function = seperate_cat_cont_columns)
+column_properties_df = column_properties_df.transpose()
 
 
 #column_properties_df = column_properties_df.fillna(False)
@@ -874,6 +992,7 @@ print()
 
 
 
+
 print('Cleaning text in unresolved columns')
 
 
@@ -881,29 +1000,26 @@ column_split_mapper_dict = {}
 
 
 # Clean text columns
-auto_generated_data_df = pd.DataFrame()
 
 
-
-#def clean_data(df):
-    
-
+def clean_unresolved_columns(df):
+    auto_generated_data_df = pd.DataFrame()
 
 
-for index, row in column_properties_df.iterrows():
- 
-    if index == 'SalePrice':
-        print('debug found')
+    for idx, column in enumerate(df.columns):
+        print(column)
+
+
+#    for index, row in column_properties_df.iterrows():
+            
+        list_of_autogenerated_df = []
         
-    list_of_autogenerated_df = []
-    
-    column_name_in_train_df = index
-    if row['unresolved'] == True:
-        print(index)        
+#        column_name_in_train_df = index
+        
         # first split with space, then remove special charecters
 #        cleaned_and_split_df  = train[column_name_in_train_df].apply(clean_and_split_text)
         
-        cleaned_and_split_df  = train[column_name_in_train_df].apply(clean_text, filters = '\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n')
+        cleaned_and_split_df  = df[column].apply(clean_text, filters = '\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n')
                                               
         cleaned_and_split_df  = cleaned_and_split_df.apply(split_text, split_at = ' ')  
         
@@ -914,14 +1030,29 @@ for index, row in column_properties_df.iterrows():
         
         #convert column of lists into its own seperate column
         multi_column_df = cleaned_and_split_df.apply(pd.Series)
-
-        #rename columnn names to include original name
-        multi_column_df = multi_column_df.rename(columns = lambda x : column_name_in_train_df + '_' + str(x))
+        multi_column_df = multi_column_df.add_prefix(column + '_###_cleaned_###_')
         
-        column_split_mapper_dict[column_name_in_train_df] = list(multi_column_df.columns)
+        #rename columnn names to include original name
+#            multi_column_df = multi_column_df.rename(columns = lambda x : column_name_in_train_df + '_' + str(x))
+        
+#        column_split_mapper_dict[column] = list(multi_column_df.columns)
+
+    
+
+
 
         #pd.concat(auto_generated_categories, tags)
         auto_generated_data_df = auto_generated_data_df.join(multi_column_df, how = 'outer')
+
+
+    return auto_generated_data_df
+
+
+
+auto_generated_data_df = parallise(train_unresolved, clean_unresolved_columns)
+
+
+
 
 
 
@@ -944,17 +1075,26 @@ auto_generated_data_df_continuous = pd.DataFrame()
 
 
 
-#convert possible numbers to numeric type
-for column in auto_generated_data_df.columns:
-    #try to convert columns with all numbers to integers
-    for row in auto_generated_data_df[column]:
 
-        try:
-            auto_generated_data_df.iloc[row,column] = pd.to_numeric(auto_generated_data_df.iloc[row,column])
-            
-            print('Converted auto generated column to int: ', column)
-        except Exception:
-            pass     
+#convert possible numbers to numeric type
+def try_convert_to_numeric(df):
+    for column in df.columns:
+        #try to convert columns with all numbers to integers
+        for row in df[column]:
+    
+            try:
+                df.iloc[row,column] = pd.to_numeric(df.iloc[row,column])
+                
+                print('Converted auto generated column to int: ', column)
+            except Exception:
+                pass     
+    return df
+
+
+auto_generated_data_df = parallise(auto_generated_data_df, try_convert_to_numeric)
+
+
+
 
 
 
