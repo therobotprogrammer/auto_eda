@@ -9,6 +9,15 @@ Created on Mon Feb 11 16:37:03 2019
 
 # To Do: maek 
 
+##############################################
+# ALL TO DO
+# try without using missing data
+# to do: change hash function as md5 data to be hashed randomly. As a result the rf imputer throws it. 
+# to do: change hash function as md5 data to be hashed randomly. As a result the rf imputer throws it.  
+
+
+
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -115,32 +124,18 @@ elif global_problem_type == 'regression':
     
 
 
-    
-    
-    
-results_dir = os.path.join(directory + '/results')    
 
-y_train = train[target_column].copy(deep = True)    
 
+results_dir = os.path.join(directory + '/results')  
+y_train = train[target_column].copy(deep = True)  
 target_df = train[target_column].copy(deep = True)
 
 
-##############################################
-# ALL TO DO
-# try without using missing data
-# to do: change hash function as md5 data to be hashed randomly. As a result the rf imputer throws it. 
-# to do: change hash function as md5 data to be hashed randomly. As a result the rf imputer throws it.  
-
-
-
-
-
-
 log_warnings = set()
-show_plots = False
+show_plots = True
 
 global_cores = multiprocessing.cpu_count()      
-global_verify_parallel_execution = True
+global_verify_parallel_execution = False
 global_debug_mode = False
 
 
@@ -668,6 +663,31 @@ class plotter:
 
 
 
+#Target Analysis. Assuming univariate target
+# The following is not working
+#def target_analysis(y_series):    
+#    
+#    message = 'TARGET - kde plot - ' + y_series.name 
+#    print(message)    
+#    plt.figure()
+##    
+#    sns.kdeplot(y_series, shade = True, color = 'r')
+#
+##    plt.setp(ax.get_xticklabels(), rotation=45)
+#    
+##    plt.tight_layout()   
+##
+##    file_name = os.path.join(results_dir + '/' + message + '.jpg')
+##    plt.savefig(file_name, dpi = 1200)
+##    
+#    plt.show()
+#    
+#    
+#    
+#target_analysis(y_train)
+
+
+
 def seperate_cat_cont_columns(train):
 
     #to do: only categorical and unresolved seem to be used. delete extra entries. or have continuous entry
@@ -830,56 +850,27 @@ def parallise(df_input, function, partitions=None, processes=None):
             
             
             with ProcessPoolExecutor(processes) as pool:     
-#                df_output_parallel = pd.concat(pool.map(function, df_split), axis = 1)
-                results_generator = pool.map(function, df_split)
-                
-#                temp_splits = []
-#                for split in results_generator:
-#                    temp_splits.append(split)
-                
+                results_generator = pool.map(function, df_split)             
                 results_as_splits = list(results_generator)
-                
-                
-                for value in results_generator:  
-                    print(value.shape)  
-                
-            
-            
+           
             compiled_result_parallel = [] 
             
             if isinstance(results_as_splits[0], tuple):                
                 
-                items_per_split =  len(results_as_splits[0])                
-                
-                               
+                items_per_split =  len(results_as_splits[0])                      
                 
                 for index in range(0, items_per_split):
                     splits_to_concatenate = []
     
                     for split in results_as_splits:
-                            #If multiple values are returned, then they are a tuple. They have to be accessed as index. 
+                        #If multiple values are returned, then they are a tuple. They have to be accessed as index. 
                         splits_to_concatenate.append(split[index])                            
                    
                     #concatenate based on datatype
                     if isinstance(splits_to_concatenate[0], pd.DataFrame):
-
-                        #Save list of indexes
-#                        df_indexes = splits_to_concatenate[0].index    
-                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1, ignore_index = True) 
-                        
-                        #restore index. This is needed because indexes were ignored. 
-                        #Indexes had to be ignored to join dataframes with default numbers as indexes.
-                        #such dataframes were getting joined row wise as well as column wise
-                        #setting axis did not help, because it would break situations where indexes were 
-                        #manully set labels. 
-                        
-#                        joined_data_df.index = df_indexes
+                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1) 
                         compiled_result_parallel.append(joined_data_df)                        
-                        
-                        
-                        
-#                        compiled_result_parallel.append( pd.concat(splits_to_concatenate, axis = 0, ignore_index = True ) 
-                        
+                   
                     else:
                         joined_data = join(splits_to_concatenate)
                         compiled_result_parallel.append(joined_data)
@@ -897,22 +888,8 @@ def parallise(df_input, function, partitions=None, processes=None):
                    
                     #concatenate based on datatype
                     if isinstance(splits_to_concatenate[0], pd.DataFrame):
-                        
-                        #Save list of indexes
-#                        df_indexes = splits_to_concatenate.index    
-                        
-                        #here axis = 0 because this is only one dataframe not a tuple
-                        #here the generator throws everything row wise
-                        #therefore row wise concatenation is needed
-                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1) 
-                        
-                        #restore index. This is needed because indexes were ignored. 
-                        #Indexes had to be ignored to join dataframes with default numbers as indexes.
-                        #such dataframes were getting joined row wise as well as column wise
-                        #setting axis did not help, because it would break situations where indexes were 
-                        #manully set labels. 
-                        
-#                        joined_data_df.index = df_indexes
+                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1)      
+
                         compiled_result_parallel.append(joined_data_df)                
                     else:
                         joined_data = join(splits_to_concatenate)
@@ -921,16 +898,16 @@ def parallise(df_input, function, partitions=None, processes=None):
                     #since original function returned only one item, 
                     #this function also returns only 1 item and not a tuple of items
                     
-                    compiled_result_parallel = compiled_result_parallel[0]
-                        
+                    compiled_result_parallel = compiled_result_parallel[0]                        
     
             if global_verify_parallel_execution == True:
                 compiled_result_serial = function(df_input)
                 
                 if isinstance(compiled_result_serial, tuple):
                     for index, serial_item in enumerate(compiled_result_serial) :
-                        if isinstance(compiled_result_serial, pd.DataFrame) :
-                            assert serial_item.equals( compiled_result_parallel[index] ), 'Serial and Parallel compution do not match'
+                        if isinstance(serial_item, pd.DataFrame) :
+                            parallel_item = compiled_result_parallel[index]
+                            assert serial_item.equals(parallel_item), 'Serial and Parallel compution do not match'
                         
                         else:
                             assert serial_item == compiled_result_parallel[index] , 'Serial and Parallel compution do not match'
@@ -996,25 +973,16 @@ print()
 print('Cleaning text in unresolved columns')
 
 
-column_split_mapper_dict = {}
-
-
 # Clean text columns
 
 
 def clean_unresolved_columns(df):
     auto_generated_data_df = pd.DataFrame()
-
+    column_split_mapper_dict = {}
 
     for idx, column in enumerate(df.columns):
         print(column)
-
-
-#    for index, row in column_properties_df.iterrows():
-            
-        list_of_autogenerated_df = []
-        
-#        column_name_in_train_df = index
+  
         
         # first split with space, then remove special charecters
 #        cleaned_and_split_df  = train[column_name_in_train_df].apply(clean_and_split_text)
@@ -1030,12 +998,10 @@ def clean_unresolved_columns(df):
         
         #convert column of lists into its own seperate column
         multi_column_df = cleaned_and_split_df.apply(pd.Series)
-        multi_column_df = multi_column_df.add_prefix(column + '_###_cleaned_###_')
         
         #rename columnn names to include original name
-#            multi_column_df = multi_column_df.rename(columns = lambda x : column_name_in_train_df + '_' + str(x))
-        
-#        column_split_mapper_dict[column] = list(multi_column_df.columns)
+        multi_column_df = multi_column_df.add_prefix(column + '_')           
+        column_split_mapper_dict[column] = list(multi_column_df.columns)
 
     
 
@@ -1045,11 +1011,11 @@ def clean_unresolved_columns(df):
         auto_generated_data_df = auto_generated_data_df.join(multi_column_df, how = 'outer')
 
 
-    return auto_generated_data_df
+    return auto_generated_data_df, column_split_mapper_dict
 
 
 
-auto_generated_data_df = parallise(train_unresolved, clean_unresolved_columns)
+auto_generated_data_df, column_split_mapper_dict = parallise(train_unresolved, clean_unresolved_columns)
 
 
 
@@ -1118,6 +1084,7 @@ def get_type(data):
     
     
 
+#### Tp Do : Do DP here
 for column in column_split_mapper_dict.keys():
     data_types = set()
 
@@ -1400,15 +1367,24 @@ def one_hot(df, exclude_from_ohe = None):
 
 
 
-def show_heatmap(X_train, message = '', x_label = '', y_label = ''):
+def show_heatmap(X_train, message = '', x_label = '', y_label = '', show_absolute_values = True):
     
     #Show corelated features . Dont use np.corrcoef as it is not nan tolerant
+    print('Corelation (positive & negative) using numpy')
     corr = np.corrcoef(X_train.values, rowvar=False)
+    corr = np.absolute(corr)
     
     sns.heatmap(corr)  
     plt.show()   
     
+    
     corr_df = X_train.corr()
+    
+    
+    if show_absolute_values:
+        #convert 
+        corr_df = corr_df.select_dtypes(include=[np.number]).abs()        
+        message = message + '_absolute_correlation'
     
 #    corr = np.corrcoef(X_train)
 #    corr_df = pd.DataFrame(corr)
