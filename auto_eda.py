@@ -50,6 +50,7 @@ from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Pool
 
 
+import xgboost as xgb
 
 
 import plotly 
@@ -87,7 +88,7 @@ def drop_and_log_column_at_index(df, index = None, reason = None):
     
 
 if global_problem_type == 'categorical':
-    directory = '/home/pt/Documents/auto_eda/categorical' 
+    directory = '/media/pt/hdd/Auto EDA Results/categorical' 
     file_path = os.path.join(directory, 'train.csv')
     train = pd.read_csv(file_path, index_col = False)
     
@@ -104,7 +105,7 @@ if global_problem_type == 'categorical':
     
     
 else:
-    directory = '/home/pt/Documents/auto_eda/regression'   
+    directory = '/media/pt/hdd/Auto EDA Results/regression'   
     
     file_path = os.path.join(directory, 'train.csv')
     train = pd.read_csv(file_path, index_col = False)
@@ -669,7 +670,7 @@ class plotter:
 #    
 #    message = 'TARGET - kde plot - ' + y_series.name 
 #    print(message)    
-#    plt.figure()
+##    plt.figure()
 ##    
 #    sns.kdeplot(y_series, shade = True, color = 'r')
 #
@@ -1893,6 +1894,8 @@ def rmse(y_orig, y_pred):
 def log_rmse(y_orig, y_pred):
     return math.sqrt(metrics.mean_squared_log_error(y_orig,y_pred) )
 
+
+
 def ada_boost(X_train, y_train, message = ''):
         if global_problem_type == 'classification':            
             base_classifier = tree.DecisionTreeClassifier()            
@@ -2250,7 +2253,10 @@ def standard_scaler(X_train):
 
 
 
-ada_boost_analysis = ada_boost(X_train, y_train)
+use_adaboost = False
+
+if use_adaboost:
+    ada_boost_analysis = ada_boost(X_train, y_train)
 
 
 #
@@ -2291,6 +2297,77 @@ X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamina
 
 
 
+from tpot import TPOTClassifier
+from tpot import TPOTRegressor
+import tpot
+from joblib import dump
+
+
+memory_dir = os.path.join(directory, 'memory')
+
+
+
+warm_start = False
+
+if not os.path.isdir(memory_dir):
+    os.makedirs(memory_dir)
+    warm_start = False
+else:
+    warm_start = True
+
+
+
+if global_problem_type == 'categorical':
+    pipeline_optimizer = TPOTClassifier(generations=50, population_size=20, cv=5, random_state=42, verbosity=2, scoring = global_scoring,  memory = memory_dir, n_jobs=-1, warm_start = warm_start)
+    
+elif global_problem_type == 'regression':
+    pipeline_optimizer = TPOTRegressor(generations=50, population_size=20, cv=5, random_state=42, verbosity=2, scoring = global_scoring,  memory = memory_dir, n_jobs=-1, warm_start = warm_start)
+     
+
+X_train = X_train_dict['original'].copy(deep = True)
+   
+pipeline_optimizer.fit(X_train, y_train)
+
+
+
+#result_file_name = os.path.join(directory, 'tpot_GA_results.py')
+
+results_dir_ga = os.path.join(results_dir,  'Genetic Algorithm Pipeline')  
+ga_generated_code_file = os.path.join(results_dir_ga,  'tpot_GA_results.py')  
+
+if not os.path.isdir(results_dir_ga):
+    os.makedirs(results_dir_ga)
+
+
+#saving
+pipeline_optimizer.export(ga_generated_code_file)
+pickle_best_pipeline_file = os.path.join(results_dir_ga , 'pickled_pipeline_object')
+dump(pipeline_optimizer.fitted_pipeline_, pickle_best_pipeline_file)
+
+
+
+
+
+
+
+
+from scipy import stats
+
+
+plt.subplots(figsize=(12,9))
+sns.distplot(y_train, fit=stats.norm,color = 'r', kde = True, rug = True)
+
+# Get the fitted parameters used by the function
+(mu, sigma) = stats.norm.fit(y_train)
+
+# plot with the distribution
+plt.legend(['Normal dist. ($\mu=$ {:.2f} and $\sigma=$ {:.2f} )'.format(mu, sigma)], loc='best')
+plt.ylabel('Frequency')
+
+#Probablity plot
+fig = plt.figure()
+stats.probplot(y_train, plot=plt)
+plt.show()
 
 
 
@@ -2300,6 +2377,22 @@ X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamina
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#s = pickle.dumps(pipeline_optimizer.fitted_pipeline_)
 
 
 #for perplexity in range(20,10000, 100):
