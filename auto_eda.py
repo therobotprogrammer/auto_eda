@@ -2242,14 +2242,24 @@ def remove_outliers(df, n_estimators = 1000, contamination = .01, message = ''):
 
 
 
+def plot_all_continuous_data_kde(df_local):
+    plt.figure()
+    cont_column_names = list(combined_continuous_df.columns)
+    
+    for column in cont_column_names:     
+        sns.kdeplot(df_local[column])        
+    plt.show()
+    
 
-
-def standard_scaler(X_train):
+def standard_scaler(df_local):
     scaler = preprocessing.StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train[X_train.columns])
-    X_train_scaled = pd.DataFrame(X_train_scaled)    
+    df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
+    df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
+    
+    if show_plots:
+        plot_all_continuous_data_kde(df_local_scaled)
            
-    return X_train_scaled
+    return df_local_scaled
 
 
 
