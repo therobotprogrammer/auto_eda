@@ -1663,6 +1663,13 @@ combined_continuous_df.boxplot()
 plt.show()
 
 
+combined_categorical_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_categorical_df')
+combined_continuous_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_continuous_df')
+
+
+
+
+
 show_plots = True
 X_train = pre_processing(combined_categorical_df, combined_continuous_df, imputer = 'random_forest', enable_ohe = False, exclude_column_from_ohe = exclude_from_ohe)
 
