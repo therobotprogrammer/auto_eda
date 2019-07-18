@@ -53,14 +53,24 @@ from multiprocessing import Pool
 import xgboost as xgb
 
 
-import plotly 
-
-import plotly.plotly as py
-import plotly.graph_objs as go
 
 
 from missingpy import KNNImputer, MissForest
 import multiprocessing
+
+
+import plotly
+import plotly.graph_objs as go
+
+
+import cufflinks as cf
+cf.go_offline()
+
+
+import plotly.io as pio
+pio.renderers
+pio.renderers.default = "browser"
+
 
 
 
@@ -124,8 +134,7 @@ elif global_problem_type == 'regression':
     df = drop_and_log_column(train, 'Id', 'manually dropped - unique identifier')
     
 
-
-
+   
 
 results_dir = os.path.join(directory + '/results')  
 y_train = train[target_column].copy(deep = True)  
@@ -930,6 +939,88 @@ def serial_apply(df_input, function):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#plt.figure()
+#ax = train.boxplot()
+#
+#ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+#plt.tight_layout()
+#plt.show()
+
+
+
+#train.offline.plot(kind='box', filename='cufflinks/box-plots')
+#
+#
+#
+    
+
+
+
+
 column_properties_df = parallise(train, function = seperate_cat_cont_columns)
 column_properties_df = column_properties_df.transpose()
 
@@ -1529,9 +1620,7 @@ def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_c
     if show_plots:
         show_heatmap(imputed_df, message = 'heatmap_after_imputation')
         
-        
-    
-    
+
     
     
     if enable_ohe:
@@ -1556,7 +1645,7 @@ combined_categorical_df = pd.DataFrame()
 combined_categorical_df = combined_categorical_df.join(train_categorical,how = 'outer')
 combined_categorical_df = combined_categorical_df.join(auto_generated_data_df_categorical,how = 'outer')
 combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
-
+#combined_categorical_df = combined_categorical_df.astype('category')
 
 
 
@@ -1565,54 +1654,27 @@ combined_continuous_df = combined_continuous_df.join(train_continuous,how = 'out
 combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_continuous,how = 'outer')
 
 
+plt.figure()
+combined_categorical_df.boxplot()
+plt.show()
+
+plt.figure()
+combined_continuous_df.boxplot()
+plt.show()
 
 
 show_plots = True
-X_train = pre_processing(combined_categorical_df, combined_continuous_df, imputer = 'random_forest', enable_ohe = True, exclude_column_from_ohe = exclude_from_ohe)
+X_train = pre_processing(combined_categorical_df, combined_continuous_df, imputer = 'random_forest', enable_ohe = False, exclude_column_from_ohe = exclude_from_ohe)
+
+
+plt.figure()
+X_train.boxplot()
+plt.show()
 
 
 
 
 
-
-
-
-    
-
-
-
-
-#combined_categorical_preprocessed_df = cat_preprocess(combined_categorical_df, exclude_from_ohe = exclude_from_ohe)
-
-
-#def cast_cont_to_cat(df, features):
-#    for feature in df.columns:
-#        df[feature] = df[feature].astype('category')
-#        
-#        
-
-
-#combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df)
-
-#warning: turning off imputation
-
-#turn_off_cont_preprocessing = False
-#
-#if turn_off_cont_preprocessing:
-#    print('Warning: Continuous Features Preprocessing including Imputation turned off')
-#    combined_continuous_preprocessed_df = combined_continuous_df
-#else:
-    
-
-#combined_continuous_preprocessed_df = cont_preprocess(combined_continuous_df, missing_data_drop_threshold = .5, si_strategy = 'constant', si_fill_value = -123456)
-    
-
-
-#drop columns
-# passenger id is dropped as it uniquely identifies the row. This causes overfitting when a lot of trees are used. The model
-# remembers the passenger id and result
-
-    
 
 
 
@@ -2242,24 +2304,86 @@ def remove_outliers(df, n_estimators = 1000, contamination = .01, message = ''):
 
 
 
-def plot_all_continuous_data_kde(df_local):
-    plt.figure()
-    cont_column_names = list(combined_continuous_df.columns)
+#def plot_all_continuous_data_kde(df_local):
+#    plt.figure()
+#    cont_column_names = list(combined_continuous_df.columns)
+#
+#    for column in cont_column_names:     
+#        sns.kdeplot(df_local[column])        
+#    plt.show()
+#
+#
+#
+
+
+
+def plot_dataframe(df_local, message = ''):   
+#    cont_column_names = list(combined_continuous_df.columns)    
     
-    for column in cont_column_names:     
-        sns.kdeplot(df_local[column])        
-    plt.show()
+    df_local_continuous_only = df_local.select_dtypes(exclude = 'category')  
+    
+    ax = df_local.plot.kde()
+    ax.set_title(message)
+    ax.legend(ncol = 7, prop={'size': 9})
+
+#    df_local_continuous_only = df_local.reindex(columns = cont_column_names)  
+    
+    
+    df_local_categorical_only = df_local.select_dtypes(include = 'category')    
+#    df_local_categorical_only = df_local.reindex(columns = cont_column_names)  
+    
+    
+#    ax = df_local.plot.kde()
+#    ax.set_title(message)
+#    ax.legend(ncol = 7, prop={'size': 9})
+#
+#    ax = df_local.plot.hist()
+#    ax.set_title(message)
+#    ax.legend(ncol = 7, prop={'size': 9})
+
+    df_local_continuous_only.iplot(kind='box', boxpoints='outliers', title = message + 'Box Plot - Continuous Data')
+
     
 
-def standard_scaler(df_local):
+
+
+
+
+
+def standard_scaler(df_local, message = ''):
     scaler = preprocessing.StandardScaler()
     df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
     df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
     
     if show_plots:
-        plot_all_continuous_data_kde(df_local_scaled)
+        plot_dataframe(df_local_scaled, message)
            
     return df_local_scaled
+
+
+def min_max_scaler(df_local, message = ''):
+    scaler = preprocessing.MinMaxScaler()
+    df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
+    df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
+    
+    if show_plots:
+        plot_dataframe(df_local_scaled, message)
+           
+    return df_local_scaled
+
+
+
+def min_max_scaler(df_local, message = ''):
+    scaler = preprocessing.MinMaxScaler()
+    df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
+    df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
+    
+    if show_plots:
+        plot_dataframe(df_local_scaled, message)
+           
+    return df_local_scaled
+
+
 
 
 
@@ -2269,41 +2393,75 @@ if use_adaboost:
     ada_boost_analysis = ada_boost(X_train, y_train)
 
 
+
+
+
+
+cf.set_config_file(offline=False, world_readable=False, theme='pearl')
+X_train.iplot(kind='box', boxpoints='outliers')
+
+
+
+
 #
-message = 'scaled'
+message = 'scaled_standard'
 X_train = X_train_dict['original'].copy(deep = True)
-X_train_dict[message] = standard_scaler(X_train)
+X_train = standard_scaler(X_train, message)
+X_train_dict[message] = X_train
+
+
+
+
+#
+message = 'scaled_min_max'
+X_train = X_train_dict['original'].copy(deep = True)
+X_train = min_max_scaler(X_train, message)
+X_train_dict[message] = X_train
+
+
 
 
 #where reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
-message = 'reduced_dims_on_scaled_pca'
-X_train = X_train_dict['scaled'].copy(deep = True)
+message = 'reduced_dims_on_standard_scaled_pca'
+X_train = X_train_dict['scaled_standard'].copy(deep = True)
 X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', show_graphs = True, message = message)
 X_train_dict[message] = X_train
 
 
-#TSNE makes the assumption of local linearity which might not hold in high dimensions 
-#where the manifold may be varying and PCA can help alleviate this issue by reducing 
-#the dimensionality of the data.
 
-message = 'reduced_dims_tsne_on_scaled_pca'
-X_train = X_train_dict['reduced_dims_on_scaled_pca'].copy(deep = True)
-X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
+#where reduce_dimentions(X_train.iloc[:,:] is used as otherwise it causes the tsne cuda to crash. 
+message = 'reduced_dims_on_min_max_scaled_pca'
+X_train = X_train_dict['scaled_min_max'].copy(deep = True)
+X_train = reduce_dimentions(X_train.iloc[:,:], y_train, algorithm = 'pca', show_graphs = True, message = message)
 X_train_dict[message] = X_train
 
 
 
-message = 'reduced_dims_Isomap'
-X_train = X_train_dict['scaled'].copy(deep = True)
-X_train = reduce_dimentions(X_train, y_train, algorithm = 'isomap', n_components = 3, show_graphs = True, message = message)
-X_train_dict[message] = X_train
+# Do thse in loops over all X_train
 
-
-
-
-message = 'removed_outliers_on_pca_data_with_isolation_forest'
-X_train = X_train_dict['reduced_dims_on_scaled_pca'].copy(deep = True)
-X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamination = .01, message = message )
+#message = 'reduced_dims_on_scaled_pca'
+#X_train = X_train_dict['scaled_min_max'].copy(deep = True)
+#X_train_dict[message] = X_train
+#
+#
+#message = 'reduced_dims_tsne_on_scaled_pca'
+#X_train = X_train_dict['reduced_dims_on_scaled_pca'].copy(deep = True)
+#X_train = reduce_dimentions(X_train.iloc[:,:], y_train, n_components = 2, algorithm = 'tsne', perplexity = 30, show_graphs = True, learning_rate = 10, message = message)
+#X_train_dict[message] = X_train
+#
+#
+#
+#message = 'reduced_dims_Isomap'
+#X_train = X_train_dict['scaled'].copy(deep = True)
+#X_train = reduce_dimentions(X_train, y_train, algorithm = 'isomap', n_components = 3, show_graphs = True, message = message)
+#X_train_dict[message] = X_train
+#
+#
+#
+#
+#message = 'removed_outliers_on_pca_data_with_isolation_forest'
+#X_train = X_train_dict['reduced_dims_on_scaled_pca'].copy(deep = True)
+#X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamination = .01, message = message )
 
 
 
