@@ -33,7 +33,6 @@ import sys
 from sklearn_pandas import CategoricalImputer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.impute import SimpleImputer
-
 from sklearn import tree, model_selection, ensemble
 from sklearn.externals.six import StringIO  
 from IPython.display import Image  
@@ -49,6 +48,8 @@ from sklearn import feature_selection
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Pool
 
+import pandas_profiling
+import webbrowser, os
 
 import xgboost as xgb
 
@@ -550,7 +551,59 @@ def get_equally_spaced_non_zero_floats_in_range(start = 0, stop =1, total_number
 
 
 
+def plot_dataframe(df_local, message = ''):   
+#    cont_column_names = list(combined_continuous_df.columns)    
+    
+    df_local_continuous_only = df_local.select_dtypes(exclude = 'category')  
+    
+    ax = df_local.plot.kde()
+    ax.set_title(message)
+    ax.legend(ncol = 7, prop={'size': 9})
 
+#    df_local_continuous_only = df_local.reindex(columns = cont_column_names)  
+    
+    
+    df_local_categorical_only = df_local.select_dtypes(include = 'category')    
+#    df_local_categorical_only = df_local.reindex(columns = cont_column_names)  
+    
+    
+#    ax = df_local.plot.kde()
+#    ax.set_title(message)
+#    ax.legend(ncol = 7, prop={'size': 9})
+#
+#    ax = df_local.plot.hist()
+#    ax.set_title(message)
+#    ax.legend(ncol = 7, prop={'size': 9})
+
+    df_local_continuous_only.iplot(kind='box', boxpoints='outliers', title = message + 'Box Plot - Continuous Data')
+
+    
+
+
+
+
+
+
+def standard_scaler(df_local, message = '', show_plots_local = False):
+    scaler = preprocessing.StandardScaler()
+    df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
+    df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
+    
+    if show_plots_local:
+        plot_dataframe(df_local_scaled, message)
+           
+    return df_local_scaled
+
+
+def min_max_scaler(df_local, message = '', show_plots_local = False):
+    scaler = preprocessing.MinMaxScaler()
+    df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
+    df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
+    
+    if show_plots_local:
+        plot_dataframe(df_local_scaled, message)
+           
+    return df_local_scaled
 
 
 
@@ -994,29 +1047,6 @@ def serial_apply(df_input, function):
 
 
 
-
-
-
-
-
-
-
-
-
-#plt.figure()
-#ax = train.boxplot()
-#
-#ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-#plt.tight_layout()
-#plt.show()
-
-
-
-#train.offline.plot(kind='box', filename='cufflinks/box-plots')
-#
-#
-#
-    
 
 
 
@@ -1537,11 +1567,25 @@ def show_heatmap(X_train, message = '', x_label = '', y_label = '', show_absolut
 
 
                     
+def profiler_analysis(categorical_df, continuous_df = None):
+    combined_df = combined_continuous_df.join(categorical_df,how = 'outer')
+
+    profile_combined = pandas_profiling.ProfileReport(combined_df, title = 'Profiler Analysis Before Imputation', pool_size = 0)
+    
+    output_html_file = os.path.join (results_dir , "Profile_Report_Before_Imputation.html")                                       
+    profile_combined.to_file(output_file= output_html_file) 
+    webbrowser.open('file://' + output_html_file)
+
+
+    rejected_variables = profile_combined.get_rejected_variables(threshold=0.9)
+    
+
+    return rejected_variables
 
 
 
 def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_column_from_ohe):   
-       
+
     #label encode categorical
     
     categorical_df_label_encoded =  label_encoder(categorical_df, strategy = 'keep_missing_as_nan')
@@ -1654,17 +1698,79 @@ combined_continuous_df = combined_continuous_df.join(train_continuous,how = 'out
 combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_continuous,how = 'outer')
 
 
-plt.figure()
-combined_categorical_df.boxplot()
-plt.show()
 
-plt.figure()
-combined_continuous_df.boxplot()
-plt.show()
+def box_plot(df_local, message = ''):
+    df_local.iplot(kind='box', boxpoints='outliers', title = message + ' - Box Plot')
+    
+#box_plot(combined_categorical_df)
 
 
-combined_categorical_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_categorical_df')
-combined_continuous_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_continuous_df')
+def analyse(combined_categorical_df, combined_continuous_df, target = None):
+    
+#    #
+#    message = 'scaled_standard'
+#    combined_continuous_df_scaled = standard_scaler(combined_continuous_df, message, show_plots_local = False)
+#    
+    if type(target) is not None:
+        box_plot(target, message = 'Target')
+        
+    combined_categorical_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_categorical_df')
+    combined_continuous_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_continuous_df')
+    rejected_variables = profiler_analysis(combined_categorical_df, combined_continuous_df)
+    return rejected_variables
+
+
+
+    
+
+
+
+#counts = 0 
+#def missing_data_analysis(df_local):
+##    for column in df_local.columns:
+#        column = 'MSZoning'
+#        group_obj = df_local.groupby(column)
+#        group_dict = group_obj.groups
+#        
+#        max_count = 0
+#        max_key = None
+#        
+#        for key in group_dict.keys():            
+#            count = group_dict[key].shape[0]
+#            
+#            print('>>>' , count)
+#            
+#            if count > max_count:
+#                max_count = count
+#                max_key = key
+#                
+#                
+#            
+#        return counts
+#
+#missing_data_analysis(train)
+
+
+
+
+#profile_combined_categorical = pandas_profiling.ProfileReport(combined_categorical_df, title = 'Categorical Variables', pool_size = 0)
+#profile_combined_categorical.to_file(output_file= os.path.join (results_dir , "Categorical_Variables_Profile_Report.html"))
+#rejected_variables = profile_combined_categorical.get_rejected_variables(threshold=0.9)
+#
+#
+#profile_combined_continuous_df = pandas_profiling.ProfileReport(combined_continuous_df, title = 'Continuous Variables', pool_size = 0)
+#profile_combined_continuous_df.to_file(output_file= os.path.join (results_dir , "Combined_Continuous_df_Profile_Report.html"))
+#rejected_variables = profile.get_rejected_variables(threshold=0.9)
+#
+
+
+
+
+#combined_continuous_df.profile_report(correlations={"cramers": False})
+
+
+rejected_variables_as_per_profiler_analysis = analyse(combined_categorical_df, combined_continuous_df, y_train)
+#To Do: find why the rejected variable list is empty and create a dataset without those variables
 
 
 
@@ -2324,72 +2430,6 @@ def remove_outliers(df, n_estimators = 1000, contamination = .01, message = ''):
 
 
 
-def plot_dataframe(df_local, message = ''):   
-#    cont_column_names = list(combined_continuous_df.columns)    
-    
-    df_local_continuous_only = df_local.select_dtypes(exclude = 'category')  
-    
-    ax = df_local.plot.kde()
-    ax.set_title(message)
-    ax.legend(ncol = 7, prop={'size': 9})
-
-#    df_local_continuous_only = df_local.reindex(columns = cont_column_names)  
-    
-    
-    df_local_categorical_only = df_local.select_dtypes(include = 'category')    
-#    df_local_categorical_only = df_local.reindex(columns = cont_column_names)  
-    
-    
-#    ax = df_local.plot.kde()
-#    ax.set_title(message)
-#    ax.legend(ncol = 7, prop={'size': 9})
-#
-#    ax = df_local.plot.hist()
-#    ax.set_title(message)
-#    ax.legend(ncol = 7, prop={'size': 9})
-
-    df_local_continuous_only.iplot(kind='box', boxpoints='outliers', title = message + 'Box Plot - Continuous Data')
-
-    
-
-
-
-
-
-
-def standard_scaler(df_local, message = ''):
-    scaler = preprocessing.StandardScaler()
-    df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
-    df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
-    
-    if show_plots:
-        plot_dataframe(df_local_scaled, message)
-           
-    return df_local_scaled
-
-
-def min_max_scaler(df_local, message = ''):
-    scaler = preprocessing.MinMaxScaler()
-    df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
-    df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
-    
-    if show_plots:
-        plot_dataframe(df_local_scaled, message)
-           
-    return df_local_scaled
-
-
-
-def min_max_scaler(df_local, message = ''):
-    scaler = preprocessing.MinMaxScaler()
-    df_local_scaled = scaler.fit_transform(df_local[df_local.columns])
-    df_local_scaled = pd.DataFrame(df_local_scaled, columns = df_local.columns)    
-    
-    if show_plots:
-        plot_dataframe(df_local_scaled, message)
-           
-    return df_local_scaled
-
 
 
 
@@ -2413,7 +2453,7 @@ X_train.iplot(kind='box', boxpoints='outliers')
 #
 message = 'scaled_standard'
 X_train = X_train_dict['original'].copy(deep = True)
-X_train = standard_scaler(X_train, message)
+X_train = standard_scaler(X_train, message, show_plots_local = show_plots)
 X_train_dict[message] = X_train
 
 
@@ -2422,7 +2462,7 @@ X_train_dict[message] = X_train
 #
 message = 'scaled_min_max'
 X_train = X_train_dict['original'].copy(deep = True)
-X_train = min_max_scaler(X_train, message)
+X_train = min_max_scaler(X_train, message, show_plots_local = show_plots)
 X_train_dict[message] = X_train
 
 
@@ -2471,56 +2511,56 @@ X_train_dict[message] = X_train
 #X_train_dict[message] = remove_outliers(X_train, n_estimators = 10000, contamination = .01, message = message )
 
 
-
-from tpot import TPOTClassifier
-from tpot import TPOTRegressor
-import tpot
-from joblib import dump
-
-
-memory_dir = os.path.join(directory, 'memory')
-
-
-
-warm_start = False
-
-if not os.path.isdir(memory_dir):
-    os.makedirs(memory_dir)
-    warm_start = False
-else:
-    warm_start = True
-
-
-
-if global_problem_type == 'categorical':
-    pipeline_optimizer = TPOTClassifier(generations=50, population_size=20, cv=5, random_state=42, verbosity=2, scoring = global_scoring,  memory = memory_dir, n_jobs=-1, warm_start = warm_start)
-    
-elif global_problem_type == 'regression':
-    pipeline_optimizer = TPOTRegressor(generations=50, population_size=20, cv=5, random_state=42, verbosity=2, scoring = global_scoring,  memory = memory_dir, n_jobs=-1, warm_start = warm_start)
-     
-
-X_train = X_train_dict['original'].copy(deep = True)
-   
-pipeline_optimizer.fit(X_train, y_train)
-
-
-
-#result_file_name = os.path.join(directory, 'tpot_GA_results.py')
-
-results_dir_ga = os.path.join(results_dir,  'Genetic Algorithm Pipeline')  
-ga_generated_code_file = os.path.join(results_dir_ga,  'tpot_GA_results.py')  
-
-if not os.path.isdir(results_dir_ga):
-    os.makedirs(results_dir_ga)
-
-
-#saving
-pipeline_optimizer.export(ga_generated_code_file)
-pickle_best_pipeline_file = os.path.join(results_dir_ga , 'pickled_pipeline_object')
-dump(pipeline_optimizer.fitted_pipeline_, pickle_best_pipeline_file)
-
-
-
+#
+#from tpot import TPOTClassifier
+#from tpot import TPOTRegressor
+#import tpot
+#from joblib import dump
+#
+#
+#memory_dir = os.path.join(directory, 'memory')
+#
+#
+#
+#warm_start = False
+#
+#if not os.path.isdir(memory_dir):
+#    os.makedirs(memory_dir)
+#    warm_start = False
+#else:
+#    warm_start = True
+#
+#
+#
+#if global_problem_type == 'categorical':
+#    pipeline_optimizer = TPOTClassifier(generations=50, population_size=20, cv=5, random_state=42, verbosity=2, scoring = global_scoring,  memory = memory_dir, n_jobs=-1, warm_start = warm_start)
+#    
+#elif global_problem_type == 'regression':
+#    pipeline_optimizer = TPOTRegressor(generations=50, population_size=20, cv=5, random_state=42, verbosity=2, scoring = global_scoring,  memory = memory_dir, n_jobs=-1, warm_start = warm_start)
+#     
+#
+#X_train = X_train_dict['original'].copy(deep = True)
+#   
+#pipeline_optimizer.fit(X_train, y_train)
+#
+#
+#
+##result_file_name = os.path.join(directory, 'tpot_GA_results.py')
+#
+#results_dir_ga = os.path.join(results_dir,  'Genetic Algorithm Pipeline')  
+#ga_generated_code_file = os.path.join(results_dir_ga,  'tpot_GA_results.py')  
+#
+#if not os.path.isdir(results_dir_ga):
+#    os.makedirs(results_dir_ga)
+#
+#
+##saving
+#pipeline_optimizer.export(ga_generated_code_file)
+#pickle_best_pipeline_file = os.path.join(results_dir_ga , 'pickled_pipeline_object')
+#dump(pipeline_optimizer.fitted_pipeline_, pickle_best_pipeline_file)
+#
+#
+#
 
 
 
