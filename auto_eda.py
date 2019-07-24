@@ -138,12 +138,16 @@ elif global_problem_type == 'regression':
    
 
 results_dir = os.path.join(directory + '/results')  
+if not os.path.isdir(results_dir):
+    os.makedirs(results_dir)
+
+
 y_train = train[target_column].copy(deep = True)  
 target_df = train[target_column].copy(deep = True)
 
 
-log_warnings = set()
-show_plots = True
+global_log_warnings = set()
+show_plots = False
 
 global_cores = multiprocessing.cpu_count()      
 global_verify_parallel_execution = False
@@ -429,7 +433,7 @@ def label_encoder(df_original, strategy = 'keep_missing_as_nan', offset_labels =
     return df
 
 def warn(w):       
-    log_warnings.add(w)
+    global_log_warnings.add(w)
     print(w)
     
     
@@ -1104,7 +1108,8 @@ def clean_unresolved_columns(df):
 
     for idx, column in enumerate(df.columns):
         print(column)
-  
+        if column == 'Electrical':
+            print('Found')
         
         # first split with space, then remove special charecters
 #        cleaned_and_split_df  = train[column_name_in_train_df].apply(clean_and_split_text)
@@ -1567,20 +1572,25 @@ def show_heatmap(X_train, message = '', x_label = '', y_label = '', show_absolut
 
 
                     
-def profiler_analysis(categorical_df, continuous_df = None):
-    combined_df = combined_continuous_df.join(categorical_df,how = 'outer')
+def profiler_analysis(df1, df2 = None, message = ''):
+    if df2 is not None:
+        combined_df = df2.join(df1,how = 'outer')
+    else:
+        combined_df = df1
 
-    profile_combined = pandas_profiling.ProfileReport(combined_df, title = 'Profiler Analysis Before Imputation', pool_size = 0)
+    profile_combined = pandas_profiling.ProfileReport(combined_df, title = message + ' Profiler Analysis ', pool_size = 0)
     
     output_html_file = os.path.join (results_dir , "Profile_Report_Before_Imputation.html")                                       
     profile_combined.to_file(output_file= output_html_file) 
     webbrowser.open('file://' + output_html_file)
 
 
-    rejected_variables = profile_combined.get_rejected_variables(threshold=0.9)
+    profiler_results = profile_combined.get_description()
     
 
-    return rejected_variables
+    return profiler_results
+
+
 
 
 
@@ -1705,7 +1715,79 @@ def box_plot(df_local, message = ''):
 #box_plot(combined_categorical_df)
 
 
-def analyse(combined_categorical_df, combined_continuous_df, target = None):
+
+
+
+
+
+def extract_data_from_profiler_messages(profiler_results, value_to_extract, extract_from = 'variables', message = '', y_title = '', is_percent = False ):
+    
+    extracted_data_dict = {}
+    
+    for res in profiler_results[extract_from]:
+#        feature_name = message.model.messages.Message.column_name
+#        column_name = message.column_name
+        feature_name = res.values['varname']
+        
+        print('>>>', feature_name)
+        
+        if feature_name == 'Electrical_0':
+            print('found')
+        
+        try:
+            value = res.values[value_to_extract]
+        except:
+            #if the column is string, the P_zeros is not populated. 
+            #hence zero_percentage is set to 0
+            value = 0
+            print(feature_name)
+
+        if value != 0:
+            extracted_data_dict[feature_name] = value
+
+#        print(column_name)
+#        analysis_df.loc[column_name, 'missing'] = missing_percentage
+#        analysis_df.loc[column_name, 'zero_percentage'] = zero_percentage
+#        
+#        
+    
+    extracted_data_dict_df =  pd.DataFrame.from_dict(extracted_data_dict, orient = 'index')
+    extracted_data_dict_df.columns = [value_to_extract]
+    
+    if is_percent:
+        extracted_data_dict_df = extracted_data_dict_df*100
+        y_title = y_title + 'Percentage - Range 0 to 100' 
+    
+    extracted_data_dict_df = extracted_data_dict_df.sort_values(by = value_to_extract, ascending = False)    
+    extracted_data_dict_df.iplot(kind='bar', yTitle=y_title, title= message, filename= results_dir + message)
+    
+    
+    
+    
+    return extracted_data_dict_df
+    
+
+
+
+def retrive_from_profiler_results(profiler_results_df, value_to_retrive, title_for_graph, is_percent = False, y_title = ''):
+        res = profiler_results_df[value_to_retrive]
+        res = res.where(res != 0)
+        res.dropna(inplace = True) 
+        res.sort_values(ascending = False, inplace = True) 
+        
+        
+        if is_percent:            
+            res = res * 100 
+            y_title = y_title + 'Percentage - Range [0 - 100]'
+            
+        filename = os.path.join(results_dir,  title_for_graph)
+        
+        res.iplot(kind='bar', yTitle=y_title, title= title_for_graph, filename=filename )
+        
+        return res
+    
+    
+def analyse(combined_categorical_df, combined_continuous_df, target = None, message = ''):
     
 #    #
 #    message = 'scaled_standard'
@@ -1716,8 +1798,46 @@ def analyse(combined_categorical_df, combined_continuous_df, target = None):
         
     combined_categorical_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_categorical_df')
     combined_continuous_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_continuous_df')
-    rejected_variables = profiler_analysis(combined_categorical_df, combined_continuous_df)
-    return rejected_variables
+    
+    profiler_results = profiler_analysis(combined_categorical_df, combined_continuous_df, message = 'Profiler Before Imputation')
+    
+    
+
+#    value_to_extract = 'p_missing'
+#    extract_data_from_profiler_messages(profiler_results, value_to_extract, message = message + ' Features with Missing Data', is_percent = True)
+#
+#    value_to_extract = 'p_zeros'
+#    extract_data_from_profiler_messages(profiler_results, value_to_extract, message = message + ' Features with Zeros', is_percent = True)
+
+    profiler_results_df =  pd.DataFrame.from_dict(profiler_results['variables'], orient = 'index')
+    
+    
+    results_df = pd.DataFrame()
+
+    res = retrive_from_profiler_results(profiler_results_df, value_to_retrive = 'p_missing', title_for_graph = message + ' - Missing Data - Percentage', is_percent = True)
+    results_df = results_df.join(res,how = 'outer')    
+    
+    res = retrive_from_profiler_results(profiler_results_df, value_to_retrive = 'p_zeros', title_for_graph = message + ' - Features with Zeros - Percentage', is_percent = True)
+    results_df = results_df.join(res,how = 'outer')    
+
+    res = retrive_from_profiler_results(profiler_results_df, value_to_retrive = 'p_unique', title_for_graph = message + ' - Unique Data - Percentage', is_percent = True)
+    results_df = results_df.join(res,how = 'outer')    
+ 
+    res = retrive_from_profiler_results(profiler_results_df, value_to_retrive = 'distinct_count', title_for_graph = message + ' - Unique Data Counts', is_percent = False)
+    results_df = results_df.join(res,how = 'outer')    
+ 
+    #check for features that have both missing data and zeros
+    features_with_zeros_and_missing_data = list(set(results_df.p_missing.dropna().index) & set(results_df.p_zeros.dropna().index))
+
+    if len(features_with_zeros_and_missing_data) != 0:
+        warn('Feature has both zeros and nan - '+ str(features_with_zeros_and_missing_data) )
+        
+        
+    
+        
+    
+    
+    return profiler_results, results_df, features_with_zeros_and_missing_data
 
 
 
@@ -1769,7 +1889,7 @@ def analyse(combined_categorical_df, combined_continuous_df, target = None):
 #combined_continuous_df.profile_report(correlations={"cramers": False})
 
 
-rejected_variables_as_per_profiler_analysis = analyse(combined_categorical_df, combined_continuous_df, y_train)
+profiler_results, profiler_results_df, features_with_zeros_and_missing_data = analyse(combined_categorical_df, combined_continuous_df, y_train, message = 'Before Pre Processing')
 #To Do: find why the rejected variable list is empty and create a dataset without those variables
 
 
@@ -1779,6 +1899,8 @@ rejected_variables_as_per_profiler_analysis = analyse(combined_categorical_df, c
 show_plots = True
 X_train = pre_processing(combined_categorical_df, combined_continuous_df, imputer = 'random_forest', enable_ohe = False, exclude_column_from_ohe = exclude_from_ohe)
 
+
+profiler_analysis(X_train, message = 'Profiler Before Imputation')
 
 plt.figure()
 X_train.boxplot()
