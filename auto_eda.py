@@ -34,7 +34,7 @@ from sklearn_pandas import CategoricalImputer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.impute import SimpleImputer
 from sklearn import tree, model_selection, ensemble
-from sklearn.externals.six import StringIO  
+from sklearn.externals.six import StringIO 
 from IPython.display import Image  
 from sklearn.tree import export_graphviz
 import pydotplus
@@ -44,6 +44,7 @@ import pydot
 from sklearn.manifold import Isomap
 from sklearn import ensemble
 from sklearn import feature_selection
+from scipy import stats
 
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Pool
@@ -144,6 +145,12 @@ if not os.path.isdir(results_dir):
 
 y_train = train[target_column].copy(deep = True)  
 target_df = train[target_column].copy(deep = True)
+
+y_train_dict = {}
+y_train_dict['original'] = y_train
+
+
+
 
 
 global_log_warnings = set()
@@ -1787,17 +1794,19 @@ def retrive_from_profiler_results(profiler_results_df, value_to_retrive, title_f
         return res
     
     
-def analyse(combined_categorical_df, combined_continuous_df, target = None, message = ''):
+def analyse(combined_categorical_df, combined_continuous_df, message = ''):
     
 #    #
 #    message = 'scaled_standard'
 #    combined_continuous_df_scaled = standard_scaler(combined_continuous_df, message, show_plots_local = False)
 #    
-    if type(target) is not None:
-        box_plot(target, message = 'Target')
+
         
-    combined_categorical_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_categorical_df')
-    combined_continuous_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_continuous_df')
+#    combined_categorical_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_categorical_df')
+#    combined_continuous_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_continuous_df')
+    
+    box_plot(combined_categorical_df, message = 'Box Plot - Before Preprocessing - combined_categorical_df')
+    box_plot(combined_continuous_df, message = 'Box Plot - Before Preprocessing - combined_continuous_df')
     
     profiler_results = profiler_analysis(combined_categorical_df, combined_continuous_df, message = 'Profiler Before Imputation')
     
@@ -1889,7 +1898,139 @@ def analyse(combined_categorical_df, combined_continuous_df, target = None, mess
 #combined_continuous_df.profile_report(correlations={"cramers": False})
 
 
-profiler_results, profiler_results_df, features_with_zeros_and_missing_data = analyse(combined_categorical_df, combined_continuous_df, y_train, message = 'Before Pre Processing')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Analysis
+    
+#Target Analysis
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+profiler_results, profiler_results_df, features_with_zeros_and_missing_data = analyse(combined_categorical_df, combined_continuous_df, message = 'Before Pre Processing')
 #To Do: find why the rejected variable list is empty and create a dataset without those variables
 
 
@@ -2688,23 +2829,113 @@ X_train_dict[message] = X_train
 
 
 
-from scipy import stats
 
 
-plt.subplots(figsize=(12,9))
-sns.distplot(y_train, fit=stats.norm,color = 'r', kde = True, rug = True)
+plt.figure()
+plt.title('Target - Normal Distribution')
+sns.distplot(y_train, fit=stats.norm, color = 'r', kde = True, rug = True)
+
+#plt.figure(2)
+plt.figure()
+plt.title('Target - Log Normal Distribution')
+sns.distplot(y_train, fit=stats.lognorm, color = 'r', kde = True, rug = False)
+
+
+#plt.figure(3)
+plt.figure()
+plt.title('Target - Jhonson Distribution')
+sns.distplot(y_train, fit=stats.johnsonsu, color = 'r', kde = True, rug = False)
+plt.show()
+
+
+plt.figure()
+plt.title('Target - Cauchy Distribution')
+sns.distplot(y_train, fit=stats.cauchy, color = 'r', kde = True, rug = False)
+plt.show()
+
 
 # Get the fitted parameters used by the function
-(mu, sigma) = stats.norm.fit(y_train)
-
-# plot with the distribution
-plt.legend(['Normal dist. ($\mu=$ {:.2f} and $\sigma=$ {:.2f} )'.format(mu, sigma)], loc='best')
-plt.ylabel('Frequency')
+#(mu, sigma) = stats.norm.fit(y_train)
+#
+## plot with the distribution
+#plt.legend(['Normal dist. ($\mu=$ {:.2f} and $\sigma=$ {:.2f} )'.format(mu, sigma)], loc='best')
+#plt.ylabel('Frequency')
 
 #Probablity plot
-fig = plt.figure()
-stats.probplot(y_train, plot=plt)
+
+
+
+
+from sklearn.preprocessing import PowerTransformer
+
+
+def analyse_target(y_train_dict, message = ''):   
+    y_train_local = y_train_dict['original']
+
+    k2, p = stats.normaltest(y_train_local)
+    alpha = 1e-3
+    print("p = {:g}".format(p))
+    
+    if p < alpha:  # null hypothesis: x comes from a normal distribution
+        print("The null hypothesis can be rejected")
+    else:
+        print("The null hypothesis cannot be rejected")
+
+
+
+    plt.figure()
+    stats.probplot(y_train_local, plot=plt)
+    title = message + ' - ' + 'Before Transformations' + '.jpg'
+    plt.title(title,fontsize=18)        
+    file_name = os.path.join(results_dir , title )    
+    plt.savefig(file_name, dpi = 1200)
+
+    plt.show()
+
+
+
+    transformers = ['yeo-johnson', 'box-cox']
+
+    for transformer in transformers:
+      
+        y_train_local = y_train_dict['original']
+
+        if transformer == 'box-cox' and y_train_local.min() < 0 :
+            #check if all values are positive as this is a requirement for box-cox
+            pass
+
+        y_train_local = y_train_local.values
+        y_train_local = y_train_local.reshape(-1,1)
+        
+        pt = PowerTransformer()
+        y_train_local = pt.fit_transform(y_train_local)
+        y_train_local = np.ndarray.flatten(y_train_local)
+        y_train_local = pd.Series(y_train_local)
+        y_train_dict[transformer]  = y_train_local
+    
+    
+        #to do: save this using plotter
+        plt.figure()
+        stats.probplot(y_train_dict[transformer] ,  plot=plt)
+        title = message + ' - ' + transformer  + '.jpg'
+        plt.title(title,fontsize=18)
+        
+        file_name = os.path.join(results_dir , title )    
+        plt.savefig(file_name, dpi = 1200)
+
+        plt.show()
+    
+    
+analyse_target(y_train_dict, 'Target')    
+    
+
+
+plt.figure()
+plt.title('Target - Jhonson Distribution')
+y_train = y_train_dict['yeo-johnson']
+sns.distplot(y_train, fit=stats.johnsonsu, color = 'r', kde = True, rug = False)
 plt.show()
+
 
 
 
