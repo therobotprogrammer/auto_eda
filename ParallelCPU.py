@@ -84,31 +84,48 @@ import math
 #        return joined_data_df        
             
             
-
+ 
 
 def join_dataframes(df_list):
 
     dtypes = {}
     
+    
+    count_df_with_common_columns = 0
+    
     for df in df_list:
-        for column in df.columns:
-            data_type = str(df[column].dtype)       
-#            print('Column:' , column , '   Dtype:', data_type )
-
-            dtypes[column] = data_type    
-    
-    
-    for idx, sub_df in enumerate(df_list):
-        df_list[idx] = sub_df.T
-
-    joined_data_df = pd.concat(df_list, axis = 0)      
-    joined_data_df = joined_data_df.T 
-    
-    for column in joined_data_df.columns:
-        dtype = dtypes[column]
-        joined_data_df[column] = joined_data_df[column].astype(dtype)
+        if all(df_list[0].columns == df.columns) :
+            count_df_with_common_columns +=1
+        else:
+            break
         
-    return joined_data_df    
+    if count_df_with_common_columns == len(df_list):
+        joined_data_df = pd.concat(df_list, axis = 0)   
+        return joined_data_df
+    
+    else:
+        #preserve datatypes before transpose
+        for df in df_list:
+            for column in df.columns:
+                data_type = str(df[column].dtype)       
+    #            print('Column:' , column , '   Dtype:', data_type )
+    
+                dtypes[column] = data_type    
+    
+        #rotate individual dataframes
+        for idx, sub_df in enumerate(df_list):
+            df_list[idx] = sub_df.T
+    
+        #combine dataframes
+        joined_data_df = pd.concat(df_list, axis = 0)      
+        joined_data_df = joined_data_df.T 
+        
+        #revert original column datatypes that are lost due to transpose
+        for column in joined_data_df.columns:
+            dtype = dtypes[column]
+            joined_data_df[column] = joined_data_df[column].astype(dtype)
+            
+        return joined_data_df    
 
 
 
