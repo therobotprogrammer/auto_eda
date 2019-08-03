@@ -16,7 +16,7 @@ Created on Mon Feb 11 16:37:03 2019
 # to do: change hash function as md5 data to be hashed randomly. As a result the rf imputer throws it.  
 
 
-
+from ParallelCPU import ParallelCPU
 
 import pandas as pd
 import numpy as np
@@ -47,7 +47,6 @@ from sklearn import feature_selection
 from scipy import stats
 
 from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Pool
 
 import pandas_profiling
 import webbrowser, os
@@ -159,6 +158,11 @@ show_plots = False
 global_cores = multiprocessing.cpu_count()      
 global_verify_parallel_execution = False
 global_debug_mode = False
+
+
+
+parallel = ParallelCPU(verify_parallel_execution = global_verify_parallel_execution, debug_mode = global_debug_mode)
+
 
 
 train.info()
@@ -586,6 +590,8 @@ def plot_dataframe(df_local, message = ''):
 #    ax.set_title(message)
 #    ax.legend(ncol = 7, prop={'size': 9})
 
+#    df_local_categorical_only.iplot(kind='box', boxpoints='outliers', title = message + 'Box Plot - Categorical Data')
+
     df_local_continuous_only.iplot(kind='box', boxpoints='outliers', title = message + 'Box Plot - Continuous Data')
 
     
@@ -765,7 +771,11 @@ class plotter:
 def seperate_cat_cont_columns(train):
 
     #to do: only categorical and unresolved seem to be used. delete extra entries. or have continuous entry
-    column_properties_df = pd.DataFrame(columns = ['categorical', 'continuous', 'text', 'unresolved', 'incomplete', 'imputed', 'error'])
+    categorical_columns = []
+    continuous_columns = []
+    unresolved_columns = []
+    error_columns = []
+    
 
     for idx, column in enumerate(train.columns):
         print()
@@ -785,42 +795,24 @@ def seperate_cat_cont_columns(train):
             
         except: 
             is_numeric = False
-       
-        
-       
+
+    
         try:
-            #column_properties_df.loc[column, 'Index'] = column
-            column_properties_df.loc[column, 'error'] = False
             group_obj = train.groupby(column)
             group_count_in_column = group_obj.count().shape[0]
-            
-            categorical = False
-            
+                       
             log_column_str = 'Log: >>>>> ' + '[' +  column + '] '
-            log_target_str = '[' + target_column +']'
+
             
             if group_count_in_column <= max_groups_in_categorical_data:
                 print('Log: [', column,'] is categorical. Unique groups in category: ', group_count_in_column)
-                categorical = True
                 
-            if categorical:
-    #            if train[column].dtypes == 'O':
-    #                print(log_column_str, ' Type is Object. Applying label encoding ')
-    #                labelencoder = LabelEncoder()
-    #                labelencoder.fit_transform(train[column])
-    #                train[column] = labelencoder.transform(train[column])
-                         
-                #try to convert data to numeric if possible
                 if is_numeric:
-#                    temp_column = pd.to_numeric(train[column])               
-                    column_properties_df.loc[column, 'categorical'] = True
+                    categorical_columns.append(column)
 
                     if column != target_column:
                         if show_plots:
-    #                        print(log_column_str, 'vs target ', log_target_str)
-    #                        plt.figure()
-    #                        sns.catplot(x= column, hue = target_column, data = train, kind = 'count', height=6)
-    #                        plt.show()
+
                             if global_problem_type == 'categorical':
                                 plotter.plot_cat_cat(x=train[column] , y = y_train)  
                                 
@@ -828,35 +820,21 @@ def seperate_cat_cont_columns(train):
                                 plotter.plot_cont_cat(x = train[column] , y  = y_train)  
                             else:
                                 raise Exception('target is neither categorical nor regression')
-                                
-        #                sns.factorplot(x="Embarked", hue="Survived", data=titanic_train, kind="count", height=6)
-#                        train_categorical[column] = temp_column                
-    
                         
                 else:
-                    
-                    column_properties_df.loc[column, 'unresolved'] = True
+                    unresolved_columns.append(column)
                     print(log_column_str + 'is alphanumeric. Added for auto processing')
                     pass     
-                        
-    #                else:
-    #                    y_train = temp_column                  
-    #                
+                
                     
             else:    
                 if is_numeric and column != target_column:     
-#                    column_properties_df.loc[column, 'categorical'] = False
-                    
-#                            train_continuous[column] = train[column]
-                    column_properties_df.loc[column, 'continuous'] = True                   
+
+                    continuous_columns.append(column)               
                     
                     try:
                             if show_plots:
-    #                            plt.figure()
-    #                            sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()  
-    #                            plt.show()
-                                
-    #                            plotter.plot_cat_cont(train, column , target_column)
+
                                 if global_problem_type == 'categorical':
                                     plotter.plot_cat_cont(x = train[column] , y  = y_train) 
                                     
@@ -864,142 +842,27 @@ def seperate_cat_cont_columns(train):
                                     plotter.plot_cont_cont(x = train[column] , y  = y_train) 
                                 else:
                                     raise Exception('target is neither categorical nor regression')
-                                
-                                
-                                
 
     
                     except:
                             warn('Log: >>>>> Unknown error: Cannot make graph for column: ' + column)
-                            column_properties_df.loc[column, 'error'] = True
+                            error_columns.append(column)
     
                 else:
                     print(log_column_str , 'Cannot make graph for continous column and object. Will be processed as text later')
-                    column_properties_df.loc[column, 'unresolved'] = True
-    
+                    unresolved_columns.append(column)
     
         except:
             print(log_column_str , 'Preprocessing failed. Proceeding to next column')
         
-    #here transpose is used because the parallise function splits data column wise and therefore expects results column wise. 
-    #hense it concatenates data column wise. Where as in this, each coulmn generates a dataframe with the same rows.
-    # a better approach would be to use rows index as category, continuous etc to begin with. 
-    column_properties_df = column_properties_df.transpose() 
-    return column_properties_df
+
+    return     categorical_columns, continuous_columns, unresolved_columns,  error_columns
         
 
-#column_properties_df, train_categorical, train_continuous = seperate_cat_cont_columns(train)
-#results = seperate_cat_cont_columns(train)
-
-
-
-#                pool method    
-#                pool = Pool(processes)
-#                df_output = pd.concat(pool.map(function, df_split))
-#                pool.close()
-#                pool.join()   
-
-
-from funcy import join
-
-
-def parallise(df_input, function, partitions=None, processes=None):
-    # calculate features in paralell by splitting the dataframe into partitions and using paralell processes
-    if partitions == None:        
-        partitions = global_cores        
-    if processes == None:        
-        processes = global_cores
-       
-        
-    if global_verify_parallel_execution == True and global_debug_mode == True:
-        warn('Parallel execution is not possible in debug mode. Parallel execution will not be performed.')
-        
-    
-    if global_debug_mode == True:
-        compiled_result_serial = function(df_input)
-        return compiled_result_serial
-
-    else:
-            df_split = np.array_split(df_input, partitions, axis=1)  # split dataframe into partitions column wise
-            
-            
-            with ProcessPoolExecutor(processes) as pool:     
-                results_generator = pool.map(function, df_split)             
-                results_as_splits = list(results_generator)
-           
-            compiled_result_parallel = [] 
-            
-            if isinstance(results_as_splits[0], tuple):                
-                
-                items_per_split =  len(results_as_splits[0])                      
-                
-                for index in range(0, items_per_split):
-                    splits_to_concatenate = []
-    
-                    for split in results_as_splits:
-                        #If multiple values are returned, then they are a tuple. They have to be accessed as index. 
-                        splits_to_concatenate.append(split[index])                            
-                   
-                    #concatenate based on datatype
-                    if isinstance(splits_to_concatenate[0], pd.DataFrame):
-                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1) 
-                        compiled_result_parallel.append(joined_data_df)                        
-                   
-                    else:
-                        joined_data = join(splits_to_concatenate)
-                        compiled_result_parallel.append(joined_data)
-                            
-                compiled_result_parallel = tuple(compiled_result_parallel)
- 
-    
-            else:
-                    # If a tuple was not returned, then a was returned by each split
-                    splits_to_concatenate = []
-                    
-                    for split in results_as_splits:
-                            
-                        splits_to_concatenate.append(split)                            
-                   
-                    #concatenate based on datatype
-                    if isinstance(splits_to_concatenate[0], pd.DataFrame):
-                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1)      
 
-                        compiled_result_parallel.append(joined_data_df)                
-                    else:
-                        joined_data = join(splits_to_concatenate)
-                        compiled_result_parallel.append(joined_data)
-                        
-                    #since original function returned only one item, 
-                    #this function also returns only 1 item and not a tuple of items
-                    
-                    compiled_result_parallel = compiled_result_parallel[0]                        
-    
-            if global_verify_parallel_execution == True:
-                compiled_result_serial = function(df_input)
-                
-                if isinstance(compiled_result_serial, tuple):
-                    for index, serial_item in enumerate(compiled_result_serial) :
-                        if isinstance(serial_item, pd.DataFrame) :
-                            parallel_item = compiled_result_parallel[index]
-                            assert serial_item.equals(parallel_item), 'Serial and Parallel compution do not match'
-                        
-                        else:
-                            assert serial_item == compiled_result_parallel[index] , 'Serial and Parallel compution do not match'
-                            
-                else:
-                        if isinstance(compiled_result_serial, pd.DataFrame) :
-                            assert compiled_result_serial.equals( compiled_result_parallel ), 'Serial and Parallel compution do not match'
-                        
-                        else:
-                            assert compiled_result_serial == compiled_result_parallel , 'Serial and Parallel compution do not match'                     
-    
-    return compiled_result_parallel
 
 
 
-def serial_apply(df_input, function):
-    df_output = df_input.apply(function)
-    return df_output
 
 
 
@@ -1050,36 +913,18 @@ def serial_apply(df_input, function):
 
 
 
+categorical_columns, continuous_columns, unresolved_columns,  error_columns = parallel.compute(train, function = seperate_cat_cont_columns)
 
+#assert(len(categorical_columns) + len(continuous_columns) + len(unresolved_columns) == train.shape[1] )
 
 
 
 
 
 
-
-
-
-
-
-column_properties_df = parallise(train, function = seperate_cat_cont_columns)
-column_properties_df = column_properties_df.transpose()
-
-
-#column_properties_df = column_properties_df.fillna(False)
-
-
-def extract_df_from_properties_df(source_df, properties_df, data_to_extract):
-    mask = properties_df[data_to_extract] == True 
-    names = properties_df[mask].index
-    names = list(names.values)
-    extracted_df = source_df[names]
-    return extracted_df
-
-
-train_categorical = extract_df_from_properties_df(train, column_properties_df, data_to_extract = 'categorical' )
-train_continuous = extract_df_from_properties_df(train, column_properties_df, data_to_extract = 'continuous' )
-train_unresolved = extract_df_from_properties_df(train, column_properties_df, data_to_extract = 'unresolved' )
+train_categorical = train.loc[ :, categorical_columns]
+train_continuous = train.loc[ :, continuous_columns]
+train_unresolved = train.loc[ :, unresolved_columns]
 
 
         
@@ -1149,7 +994,7 @@ def clean_unresolved_columns(df):
 
 
 
-auto_generated_data_df, column_split_mapper_dict = parallise(train_unresolved, clean_unresolved_columns)
+auto_generated_data_df, column_split_mapper_dict = parallel.compute(train_unresolved, clean_unresolved_columns)
 
 
 
@@ -1191,7 +1036,7 @@ def try_convert_to_numeric(df):
     return df
 
 
-auto_generated_data_df = parallise(auto_generated_data_df, try_convert_to_numeric)
+auto_generated_data_df = parallel.compute(auto_generated_data_df, try_convert_to_numeric)
 
 
 
@@ -2869,7 +2714,7 @@ plt.show()
 from sklearn.preprocessing import PowerTransformer
 
 
-def analyse_target(y_train_dict, message = ''):   
+def analyse_target(y_train_local, message = ''):   
     y_train_local = y_train_dict['original']
 
     k2, p = stats.normaltest(y_train_local)
