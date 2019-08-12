@@ -14,8 +14,171 @@ Created on Mon Jul 29 20:08:46 2019
 @author: pt
 """
 
-y = y_train_dict['original']
-y = y.values
+
+
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+import os
+
+
+from concurrent.futures import ProcessPoolExecutor
+
+
+
+
+
+
+
+from missingpy import KNNImputer, MissForest
+
+
+import plotly
+import plotly.graph_objs as go
+import cufflinks as cf
+cf.go_offline()
+
+
+import plotly.io as pio
+pio.renderers
+pio.renderers.default = "browser"
+
+
+
+
+    
+directory = '/media/pt/hdd/Auto EDA Results/regression'   
+
+file_path = os.path.join(directory, 'train.csv')
+train = pd.read_csv(file_path, index_col = False)
+target_column = 'SalePrice'
+
+    
+
+
+y_train = train[target_column].copy(deep = True)  
+
+ 
+
+
+
+
+
+y = y_train.values
+
+
+global_verify_parallel_execution = False
+global_debug_mode = True
+
+
+from funcy import join
+
+#
+#def parallise(df_input, function, partitions=None, processes=None):
+#    # calculate features in paralell by splitting the dataframe into partitions and using paralell processes
+#    if partitions == None:        
+#        partitions = global_cores        
+#    if processes == None:        
+#        processes = global_cores
+#       
+#    if global_debug_mode == True:
+#        compiled_result_serial = function(df_input)
+#        return compiled_result_serial
+#
+#    else:
+#            df_split = np.array_split(df_input, partitions, axis=1)  # split dataframe into partitions column wise
+#            
+#            
+#            with ProcessPoolExecutor(processes) as pool:     
+#                results_generator = pool.map(function, df_split)             
+#                results_as_splits = list(results_generator)
+#           
+#            compiled_result_parallel = [] 
+#            
+#            if isinstance(results_as_splits[0], tuple):                
+#                
+#                items_per_split =  len(results_as_splits[0])                      
+#                
+#                for index in range(0, items_per_split):
+#                    splits_to_concatenate = []
+#    
+#                    for split in results_as_splits:
+#                        
+#                        #If multiple values are returned, then they are a tuple. They have to be accessed as index. 
+#                        if isinstance(compiled_result_serial, pd.DataFrame) :
+#                            splits_to_concatenate.append(split[index].T) 
+#                         
+#                        else:
+#                            splits_to_concatenate.append(split[index])                            
+#                   
+#                    #concatenate based on datatype
+#                    if isinstance(splits_to_concatenate[0], pd.DataFrame):
+#                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1) 
+#                        compiled_result_parallel.append(joined_data_df)                        
+#                   
+#                    else:
+#                        joined_data = join(splits_to_concatenate)
+#                        compiled_result_parallel.append(joined_data)
+#                            
+#                compiled_result_parallel = tuple(compiled_result_parallel)
+# 
+#    
+#            else:
+#                    # If a tuple was not returned, then a was returned by each split
+#                    splits_to_concatenate = []
+#                    
+#                    for split in results_as_splits:
+#                            
+#                        splits_to_concatenate.append(split.T)                            
+#                   
+#                    #concatenate based on datatype
+#                    if isinstance(splits_to_concatenate[0], pd.DataFrame):
+#                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1)      
+#
+#                        compiled_result_parallel.append(joined_data_df)                
+#                    else:
+#                        joined_data = join(splits_to_concatenate)
+#                        compiled_result_parallel.append(joined_data)
+#                        
+#                    #since original function returned only one item, 
+#                    #this function also returns only 1 item and not a tuple of items
+#                    
+#                    compiled_result_parallel = compiled_result_parallel[0]      
+#                    compiled_result_parallel = compiled_result_parallel.T
+#    
+#            if global_verify_parallel_execution == True:
+#                compiled_result_serial = function(df_input)
+#                
+#                if isinstance(compiled_result_serial, tuple):
+#                    for index, serial_item in enumerate(compiled_result_serial) :
+#                        if isinstance(serial_item, pd.DataFrame) :
+#                            parallel_item = compiled_result_parallel[index]
+#                            assert serial_item.equals(parallel_item), 'Serial and Parallel compution do not match'
+#                        
+#                        else:
+#                            assert serial_item == compiled_result_parallel[index] , 'Serial and Parallel compution do not match'
+#                            
+#                else:
+#                        if isinstance(compiled_result_serial, pd.DataFrame) :
+#                            assert compiled_result_serial.equals( compiled_result_parallel ), 'Serial and Parallel compution do not match'
+#                        
+#                        else:
+#                            assert compiled_result_serial == compiled_result_parallel , 'Serial and Parallel compution do not match'                     
+#    
+#    return compiled_result_parallel
+#
+
+
+
+
+
+
+
+
 
 #from sklearn import datasets
 ## Load data and select first column
@@ -29,6 +192,8 @@ import scipy
 from sklearn.preprocessing import StandardScaler
 import scipy.stats
 import matplotlib.pyplot as plt
+from scipy.stats._continuous_distns import _distn_names
+
 
 
 # Create an index array (x) for data
@@ -78,105 +243,111 @@ long_version = [
                 ]
                 
                 
-                
-dist_names = [  'alpha',
-                'anglit',
-                'arcsine',
-                'argus',
-                'beta',
-                'betaprime',
-                'bradford',
-                'burr',
-                'burr12',
-                'cauchy',
-                'chi',
-                'chi2',
-                'cosine',
-                'crystalball',
-                'dgamma',
-                'dweibull',
-                'erlang',
-                'expon',
-                'exponnorm',
-                'exponweib',
-                'exponpow',
-                'f',
-                'fatiguelife',
-                'fisk',
-                'foldcauchy',
-                'foldnorm',
-                'frechet_r',
-                'frechet_l',
-                'genlogistic',
-                'gennorm',
-                'genpareto',
-                'genexpon',
-                'genextreme',
-                'gausshyper',
-                'gamma',
-                'gengamma',
-                'genhalflogistic',
-                'gilbrat',
-                'gompertz',
-                'gumbel_r',
-                'gumbel_l',
-                'halfcauchy',
-                'halflogistic',
-                'halfnorm',
-                'halfgennorm',
-                'hypsecant',
-                'invgamma',
-                'invgauss',
-                'invweibull',
-                'johnsonsb',
-                'johnsonsu',
-                'kappa4',
-                'kappa3',
-                'ksone',
-                'kstwobign',
-                'laplace',
-                'levy',
-                'levy_l',
-                'logistic',
-                'loggamma',
-                'loglaplace',
-                'lognorm',
-                'lomax',
-                'maxwell',
-                'mielke',
-                'moyal',
-                'nakagami',
-                'ncx2',
-                'ncf',
-                'nct',
-                'norm',
-                'norminvgauss',
-                'pareto',
-                'pearson3',
-                'powerlaw',
-                'powerlognorm',
-                'powernorm',
-                'rdist',
-                'reciprocal',
-                'rayleigh',
-                'rice',
-                'recipinvgauss',
-                'semicircular',
-                'skewnorm',
-                't',
-                'trapz',
-                'triang',
-                'truncexpon',
-                'truncnorm',
-                'tukeylambda',
-                'uniform',
-                'vonmises',
-                'vonmises_line',
-                'wald',
-                'weibull_min',
-                'weibull_max',
-                'wrapcauchy']
+#                
+#dist_names = [  'alpha',
+#                'anglit',
+#                'arcsine',
+#                'argus',
+#                'beta',
+#                'betaprime',
+#                'bradford',
+#                'burr',
+#                'burr12',
+#                'cauchy',
+#                'chi',
+#                'chi2',
+#                'cosine',
+#                'crystalball',
+#                'dgamma',
+#                'dweibull',
+#                'erlang',
+#                'expon',
+#                'exponnorm',
+#                'exponweib',
+#                'exponpow',
+#                'f',
+#                'fatiguelife',
+#                'fisk',
+#                'foldcauchy',
+#                'foldnorm',
+#                'frechet_r',
+#                'frechet_l',
+#                'genlogistic',
+#                'gennorm',
+#                'genpareto',
+#                'genexpon',
+#                'genextreme',
+#                'gausshyper',
+#                'gamma',
+#                'gengamma',
+#                'genhalflogistic',
+#                'gilbrat',
+#                'gompertz',
+#                'gumbel_r',
+#                'gumbel_l',
+#                'halfcauchy',
+#                'halflogistic',
+#                'halfnorm',
+#                'halfgennorm',
+#                'hypsecant',
+#                'invgamma',
+#                'invgauss',
+#                'invweibull',
+#                'johnsonsb',
+#                'johnsonsu',
+#                'kappa4',
+#                'kappa3',
+#                'ksone',
+#                'kstwobign',
+#                'laplace',
+#                'levy',
+#                'levy_l',
+#                'logistic',
+#                'loggamma',
+#                'loglaplace',
+#                'lognorm',
+#                'lomax',
+#                'maxwell',
+#                'mielke',
+#                'moyal',
+#                'nakagami',
+#                'ncx2',
+#                'ncf',
+#                'nct',
+#                'norm',
+#                'norminvgauss',
+#                'pareto',
+#                'pearson3',
+#                'powerlaw',
+#                'powerlognorm',
+#                'powernorm',
+#                'rdist',
+#                'reciprocal',
+#                'rayleigh',
+#                'rice',
+#                'recipinvgauss',
+#                'semicircular',
+#                'skewnorm',
+#                't',
+#                'trapz',
+#                'triang',
+#                'truncexpon',
+#                'truncnorm',
+#                'tukeylambda',
+#                'uniform',
+#                'vonmises',
+#                'vonmises_line',
+#                'wald',
+#                'weibull_min',
+#                'weibull_max',
+#                'wrapcauchy']
 
+
+
+dist_names = _distn_names
+if 'levy_stable' in dist_names:
+    dist_names.remove('levy_stable')
+    
 
 
 dist_names_short = ['beta',
@@ -196,7 +367,10 @@ p_values = []
 
 # Set up 50 bins for chi-square test
 # Observed data will be approximately evenly distrubuted aross all bins
-percentile_bins = np.linspace(0,100,51)
+percentile_bins = np.linspace(0,100)
+
+
+
 percentile_cutoffs = np.percentile(y_std, percentile_bins)
 observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
 cum_observed_frequency = np.cumsum(observed_frequency)
@@ -208,8 +382,24 @@ all_distributions_df = pd.DataFrame(columns = dist_names)
 
 print('Fitting Distribution to Target')
 
+
+
+
+
+
+
+
+
 # Loop through candidate distributions
-def get_chi_square_and_p_value(all_distributions_df):   
+def get_chi_square_and_ks_test(all_distributions_df):   
+    # Get histogram of original data
+    y, x = np.histogram(y_std, bins=bins, density=True)
+    x = (x + np.roll(x, -1))[:-1] / 2.0
+    
+    
+    
+    
+    
     results = pd.DataFrame()
 
     for idx, distribution in enumerate(all_distributions_df.columns):
@@ -250,9 +440,38 @@ def get_chi_square_and_p_value(all_distributions_df):
         results.loc[distribution, 'chi_square'] = ss
         results.loc[distribution, 'p_value'] = p
         
+        
+        
+        
+        #other code
+        # fit dist to data
+#        params = dist.fit(y_std)
+
+        # Separate parts of parameters
+        arg = param[:-2]
+        loc = param[-2]
+        scale = param[-1]
+
+        # Calculate fitted PDF and error with fit in distribution
+        pdf = dist.pdf(x, loc=loc, scale=scale, *arg)
+        sse = np.sum(np.power(y - pdf, 2.0))
+
+        results.loc[str(distribution), 'sse'] = sse
+        
+        
+        
+#        
+#        #my code
+#        statistic, critical_values, significance_level = scipy.stats.anderson(y_std, dist = dist)        
+#        results.loc[distribution, 'ad_test'] = statistic
+        
+        
+        
+                
+                
         print(distribution)
 
-    results = results.T
+        
     return results
         
         
@@ -260,19 +479,23 @@ def get_chi_square_and_p_value(all_distributions_df):
 
 #results = get_chi_square_and_p_value(all_distributions_df)
 
-results = parallise(all_distributions_df, function = get_chi_square_and_p_value)
+from ParallelCPU import ParallelCPU
+#results = parallise(all_distributions_df, function = get_chi_square_and_ks_test)
 
-results = results.T
-
+parallel = ParallelCPU(debug_mode = True)
+results = parallel.compute(all_distributions_df, function = get_chi_square_and_ks_test)
 
 # Report results
 
 print ('\nDistributions sorted by goodness of fit:')
 print ('----------------------------------------')
 results_new = results
-results.sort_values(['chi_square'], inplace=True)
+results.sort_values(['p_value'], ascending = False, inplace=True)
 
 print (results)
+
+
+
 
 #results_original = results
 #results_original.index = results_original['Distribution']
@@ -289,7 +512,7 @@ plt.show()
 
 
 # Get the top three distributions from the previous phase
-number_distributions_to_plot = 3
+number_distributions_to_plot = 10
 dist_names = results['Distribution'].iloc[0:number_distributions_to_plot]
 
 # Create an empty list to stroe fitted distribution parameters

@@ -16,7 +16,24 @@ Created on Mon Feb 11 16:37:03 2019
 # to do: change hash function as md5 data to be hashed randomly. As a result the rf imputer throws it.  
 
 
+#import sys
+#import os
+#sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname('/home/pt/Documents/auto_eda/'), '..')))
+
+import time
+t1 = time.time()
+
+import sys
+sys.path.insert(0, '/home/pt/Documents/auto_eda')  
+              
+
+
 from ParallelCPU import ParallelCPU
+from SaveAndLoad import SaveAndLoad
+from Plotter import Plotter
+
+
+
 
 import pandas as pd
 import numpy as np
@@ -24,7 +41,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import preprocessing, neighbors, decomposition, manifold, metrics
 from sklearn.preprocessing import LabelEncoder
-import keras
+#import keras
 import math
 import mpu
 import string
@@ -46,10 +63,16 @@ from sklearn import ensemble
 from sklearn import feature_selection
 from scipy import stats
 
-from concurrent.futures import ProcessPoolExecutor
+
+
+import sys
+from six.moves import range
+
+
+
 
 import pandas_profiling
-import webbrowser, os
+import webbrowser
 
 import xgboost as xgb
 
@@ -71,7 +94,6 @@ cf.go_offline()
 import plotly.io as pio
 pio.renderers
 pio.renderers.default = "browser"
-
 
 
 
@@ -142,6 +164,12 @@ if not os.path.isdir(results_dir):
     os.makedirs(results_dir)
 
 
+plotter = Plotter(os.path.join(results_dir + '/plots')  )
+
+database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/regression/results/pickles')    
+
+
+
 y_train = train[target_column].copy(deep = True)  
 target_df = train[target_column].copy(deep = True)
 
@@ -153,7 +181,7 @@ y_train_dict['original'] = y_train
 
 
 global_log_warnings = set()
-show_plots = False
+show_plots = True
 
 global_cores = multiprocessing.cpu_count()      
 global_verify_parallel_execution = False
@@ -207,6 +235,52 @@ if use_cuda_tsne:
 
 
 
+
+
+def text_to_word_sequence(text,
+                          filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n',
+                          lower=True, split=" "):
+    """Converts a text to a sequence of words (or tokens).
+
+    # Arguments
+        text: Input text (string).
+        filters: list (or concatenation) of characters to filter out, such as
+            punctuation. Default: ``!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\\t\\n``,
+            includes basic punctuation, tabs, and newlines.
+        lower: boolean. Whether to convert the input to lowercase.
+        split: str. Separator for word splitting.
+
+    # Returns
+        A list of words (or tokens).
+    """
+    if sys.version_info < (3,):
+        maketrans = string.maketrans
+    else:
+        maketrans = str.maketrans
+        
+    if lower:
+        text = text.lower()
+
+    if sys.version_info < (3,):
+        if isinstance(text, str):
+            translate_map = dict((ord(c), str(split)) for c in filters)
+            text = text.translate(translate_map)
+        elif len(split) == 1:
+            translate_map = maketrans(filters, split * len(filters))
+            text = text.translate(translate_map)
+        else:
+            for c in filters:
+                text = text.replace(c, split)
+    else:
+        translate_dict = dict((c, split) for c in filters)
+        translate_map = maketrans(translate_dict)
+        text = text.translate(translate_map)
+
+    seq = text.split(split)
+    return [i for i in seq if i]
+
+
+
 def is_valid(text_str):
     if (text_str == np.nan) or (text_str == None) or (text_str == 'nan') or (text_str == ''):
         return False
@@ -231,7 +305,7 @@ def clean_and_split_text(text_str, split_priority_1 = ' ', split_priority_2 = '!
     all_level_2_splits = []    
     
     for entry in level_1_splits:
-       level_2_split = keras.preprocessing.text.text_to_word_sequence(entry, filters = split_priority_2, lower = False)   
+       level_2_split = text_to_word_sequence.text_to_word_sequence(entry, filters = split_priority_2, lower = False)   
        level_2_split = ''.join(level_2_split)
        all_level_2_splits.append(level_2_split)
        
@@ -650,88 +724,7 @@ def min_max_scaler(df_local, message = '', show_plots_local = False):
 
 
  
-
-class plotter:
-
-    def plot_cat_cat(x,y):            
-        message = 'Plotter cat-cat' + x.name + 'vs target '+ y.name
-        print(message)
-        
-        plt.figure()
-        ax = sns.catplot(x= x, hue = y, kind = 'count', height=6)     
-        
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-        plt.tight_layout()
-        
-
-        file_name = os.path.join(results_dir + '/' + message + '.jpg')
-        plt.savefig(file_name, dpi = 1200)
-        
-        plt.show()
     
-        
-    def plot_cat_cont(x,y, kde = True):
-        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
-        print(message)
-        plt.figure()
-        
-        temp_df = pd.DataFrame()        
-        temp_df[x.name] = x
-        temp_df[y.name] = y
-        
-        sns.FacetGrid(temp_df, hue = y.name, height=6).map(sns.kdeplot, y.name , vertical = False).add_legend()   
-
-#        sns.FacetGrid(x, hue = y, height=6).map(sns.kdeplot, x).add_legend() 
-
-      
-        plt.tight_layout()
-        
-        file_name = os.path.join(results_dir + '/' + message + '.jpg')
-        plt.savefig(file_name, dpi = 1200)
-        
-        plt.show()
-        
-    
-    
-    def plot_cont_cont(x,y):
-        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
-        print(message)
-        plt.figure()
-#        sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()          
-        ax = sns.scatterplot(x = x, y = y, hue = y)
-        
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-        plt.tight_layout()
-        
-        file_name = os.path.join(results_dir + '/' + message + '.jpg')
-        plt.savefig(file_name, dpi = 1200)
-        
-        plt.show()
-
-    def plot_cont_cat(x,y):
-        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
-        print(message)
-        plt.figure()      
-        
-        #To Do: resolve this workaround or use plotly. Facetgrid.map doesnt work without this
-        temp_df = pd.DataFrame()
-        
-        temp_df[x.name] = x
-        temp_df[y.name] = y
-        
-#        sns.FacetGrid(x, hue = x, height=6).map(sns.kdeplot, y, vertical = False).add_legend()  
-        sns.FacetGrid(temp_df, hue = x.name, height=6).map(sns.kdeplot, y.name , vertical = False).add_legend()   
-
-        
-        
-#        sns.FacetGrid(data_df, hue = x, height=6).map(sns.kdeplot, y).add_legend()  
-        
-        plt.tight_layout() 
-        
-        file_name = os.path.join(results_dir + '/' + message + '.jpg')
-        plt.savefig(file_name, dpi = 1200)
-        
-        plt.show()
 
 #plotter.plot_cont_cont(x=train['MSSubClass'], y=y_train)
 #
@@ -1451,12 +1444,14 @@ def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_c
     #label encode categorical
     
     categorical_df_label_encoded =  label_encoder(categorical_df, strategy = 'keep_missing_as_nan')
+    
     #here outer is used. so continuous
     cat_columns = categorical_df_label_encoded.columns
     cont_columns = continuous_df.columns
     
     joint_df = categorical_df_label_encoded.join( continuous_df, how = 'outer')      
-    
+    database.save(joint_df)
+
     
     if show_plots:
         show_heatmap(joint_df, message = 'heatmap_before_imputation')
@@ -1547,24 +1542,32 @@ def pre_processing(categorical_df, continuous_df, imputer, enable_ohe, exclude_c
 
 
 
+
+t2 = time.time()
+print("Total Time =", t2-t1)
+
+
+
+
 combined_categorical_df = pd.DataFrame()
 combined_categorical_df = combined_categorical_df.join(train_categorical,how = 'outer')
 combined_categorical_df = combined_categorical_df.join(auto_generated_data_df_categorical,how = 'outer')
 combined_categorical_df = combined_categorical_df.join( auto_generated_hash_df, how = 'outer')
 #combined_categorical_df = combined_categorical_df.astype('category')
-
-
+database.save(combined_categorical_df)
 
 combined_continuous_df = pd.DataFrame()
 combined_continuous_df = combined_continuous_df.join(train_continuous,how = 'outer')
 combined_continuous_df = combined_continuous_df.join(auto_generated_data_df_continuous,how = 'outer')
+database.save(combined_continuous_df)
+
+database.save(y_train)
 
 
 
-def box_plot(df_local, message = ''):
-    df_local.iplot(kind='box', boxpoints='outliers', title = message + ' - Box Plot')
-    
-#box_plot(combined_categorical_df)
+
+
+#box_plot_df(combined_categorical_df)
 
 
 
@@ -1621,20 +1624,21 @@ def extract_data_from_profiler_messages(profiler_results, value_to_extract, extr
 
 
 
-def retrive_from_profiler_results(profiler_results_df, value_to_retrive, title_for_graph, is_percent = False, y_title = ''):
+def retrive_from_profiler_results(profiler_results_df, value_to_retrive, title_for_graph = '', is_percent = False, y_title = '', make_plot = True):
         res = profiler_results_df[value_to_retrive]
         res = res.where(res != 0)
         res.dropna(inplace = True) 
         res.sort_values(ascending = False, inplace = True) 
         
         
-        if is_percent:            
-            res = res * 100 
-            y_title = y_title + 'Percentage - Range [0 - 100]'
+        if make_plot == True:
+            if is_percent:            
+                res = res * 100 
+                y_title = y_title + 'Percentage - Range [0 - 100]'
+                
+            filename = os.path.join(results_dir,  title_for_graph)
             
-        filename = os.path.join(results_dir,  title_for_graph)
-        
-        res.iplot(kind='bar', yTitle=y_title, title= title_for_graph, filename=filename )
+            res.iplot(kind='bar', yTitle=y_title, title= title_for_graph, filename=filename )
         
         return res
     
@@ -1650,8 +1654,8 @@ def analyse(combined_categorical_df, combined_continuous_df, message = ''):
 #    combined_categorical_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_categorical_df')
 #    combined_continuous_df.iplot(kind='box', boxpoints='outliers', title = 'Box Plot - Before Preprocessing - combined_continuous_df')
     
-    box_plot(combined_categorical_df, message = 'Box Plot - Before Preprocessing - combined_categorical_df')
-    box_plot(combined_continuous_df, message = 'Box Plot - Before Preprocessing - combined_continuous_df')
+    plotter.box_plot_df(combined_categorical_df, message = 'Box Plot - Before Preprocessing - combined_categorical_df')
+    plotter.box_plot_df(combined_continuous_df, message = 'Box Plot - Before Preprocessing - combined_continuous_df')
     
     profiler_results = profiler_analysis(combined_categorical_df, combined_continuous_df, message = 'Profiler Before Imputation')
     
@@ -1674,7 +1678,7 @@ def analyse(combined_categorical_df, combined_continuous_df, message = ''):
     res = retrive_from_profiler_results(profiler_results_df, value_to_retrive = 'p_zeros', title_for_graph = message + ' - Features with Zeros - Percentage', is_percent = True)
     results_df = results_df.join(res,how = 'outer')    
 
-    res = retrive_from_profiler_results(profiler_results_df, value_to_retrive = 'p_unique', title_for_graph = message + ' - Unique Data - Percentage', is_percent = True)
+    res = retrive_from_profiler_results(profiler_results_df, value_to_retrive = 'p_unique', title_for_graph = message + ' - Unique Data - Percentage', is_percent = True, make_plot = False)
     results_df = results_df.join(res,how = 'outer')    
  
     res = retrive_from_profiler_results(profiler_results_df, value_to_retrive = 'distinct_count', title_for_graph = message + ' - Unique Data Counts', is_percent = False)
@@ -1852,6 +1856,128 @@ def analyse(combined_categorical_df, combined_continuous_df, message = ''):
 #Analysis
     
 #Target Analysis
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2676,29 +2802,6 @@ X_train_dict[message] = X_train
 
 
 
-plt.figure()
-plt.title('Target - Normal Distribution')
-sns.distplot(y_train, fit=stats.norm, color = 'r', kde = True, rug = True)
-
-#plt.figure(2)
-plt.figure()
-plt.title('Target - Log Normal Distribution')
-sns.distplot(y_train, fit=stats.lognorm, color = 'r', kde = True, rug = False)
-
-
-#plt.figure(3)
-plt.figure()
-plt.title('Target - Jhonson Distribution')
-sns.distplot(y_train, fit=stats.johnsonsu, color = 'r', kde = True, rug = False)
-plt.show()
-
-
-plt.figure()
-plt.title('Target - Cauchy Distribution')
-sns.distplot(y_train, fit=stats.cauchy, color = 'r', kde = True, rug = False)
-plt.show()
-
-
 # Get the fitted parameters used by the function
 #(mu, sigma) = stats.norm.fit(y_train)
 #
@@ -2709,77 +2812,6 @@ plt.show()
 #Probablity plot
 
 
-
-
-from sklearn.preprocessing import PowerTransformer
-
-
-def analyse_target(y_train_local, message = ''):   
-    y_train_local = y_train_dict['original']
-
-    k2, p = stats.normaltest(y_train_local)
-    alpha = 1e-3
-    print("p = {:g}".format(p))
-    
-    if p < alpha:  # null hypothesis: x comes from a normal distribution
-        print("The null hypothesis can be rejected")
-    else:
-        print("The null hypothesis cannot be rejected")
-
-
-
-    plt.figure()
-    stats.probplot(y_train_local, plot=plt)
-    title = message + ' - ' + 'Before Transformations' + '.jpg'
-    plt.title(title,fontsize=18)        
-    file_name = os.path.join(results_dir , title )    
-    plt.savefig(file_name, dpi = 1200)
-
-    plt.show()
-
-
-
-    transformers = ['yeo-johnson', 'box-cox']
-
-    for transformer in transformers:
-      
-        y_train_local = y_train_dict['original']
-
-        if transformer == 'box-cox' and y_train_local.min() < 0 :
-            #check if all values are positive as this is a requirement for box-cox
-            pass
-
-        y_train_local = y_train_local.values
-        y_train_local = y_train_local.reshape(-1,1)
-        
-        pt = PowerTransformer()
-        y_train_local = pt.fit_transform(y_train_local)
-        y_train_local = np.ndarray.flatten(y_train_local)
-        y_train_local = pd.Series(y_train_local)
-        y_train_dict[transformer]  = y_train_local
-    
-    
-        #to do: save this using plotter
-        plt.figure()
-        stats.probplot(y_train_dict[transformer] ,  plot=plt)
-        title = message + ' - ' + transformer  + '.jpg'
-        plt.title(title,fontsize=18)
-        
-        file_name = os.path.join(results_dir , title )    
-        plt.savefig(file_name, dpi = 1200)
-
-        plt.show()
-    
-    
-analyse_target(y_train_dict, 'Target')    
-    
-
-
-plt.figure()
-plt.title('Target - Jhonson Distribution')
-y_train = y_train_dict['yeo-johnson']
-sns.distplot(y_train, fit=stats.johnsonsu, color = 'r', kde = True, rug = False)
-plt.show()
 
 
 

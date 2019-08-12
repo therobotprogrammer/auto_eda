@@ -5,9 +5,7 @@ Created on Wed Aug  7 11:51:14 2019
 
 @author: pt
 """
-import itertools
 import pandas as pd
-from sklearn.tree import DecisionTreeRegressor
 
 #
 #
@@ -41,13 +39,8 @@ from sklearn.tree import DecisionTreeRegressor
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import make_pipeline
+from sklearn.impute import SimpleImputer
 
-from sklearn import ensemble
-from sklearn.experimental import enable_iterative_imputer  # noqa
-from sklearn.impute import IterativeImputer
-
-from sklearn.tree import DecisionTreeRegressor
-import copy
 
 
 
@@ -57,168 +50,211 @@ class Transformer_Switcher(BaseEstimator, TransformerMixin):
         A Custom BaseEstimator that can switch between classifiers.
         :param estimator: sklearn object - The classifier
         """ 
-#        if params != {}:
-#
-#            extracted_estimator = params['estimator']
-#    #        estimator_key.__class__.__name__
-#            del params['estimator']
-#            extracted_params = params
-#            
-#            if extracted_params == 'Default':
-#                self.estimator = extracted_estimator
-#            else:
-#                self.estimator = extracted_estimator.set_params(**extracted_params)
-        
-#        
-#        assert(params is not None)
-#        
-#        if params != {} and params is not None:
-#            print('in params')
-##            estimator_key = list( params.keys() )[0]
-#            
-#            
-##            extracted_params = params[estimator_key]
-#            params_local = copy.deepcopy(params)
-#
-#            extracted_estimator_class_name = params_local['class_name']
-##            
-#            del params_local['class_name']
-#            self.estimator = extracted_estimator_class_name(**params_local)
-#            print('Initialised')
-#            print()
-#            
-#        else:
-#            return
-        
         self.transformer = transformer
             
     def fit(self, X, y=None):
         self.transformer.fit(X)
         return self
     
-
-    def transform(self, x, y=None):
-        
+    def transform(self, x, y=None):        
         result = self.transformer.transform(x)
         return result
         
 
 
 
+if __name__ == '__main__':
+    import sys
+    sys.path.insert(0, '/home/pt/Documents/auto_eda')   
+    from SaveAndLoad import SaveAndLoad
+    from sklearn.model_selection import GridSearchCV
+    from xgboost.sklearn import XGBRegressor
+
+    from sklearn.experimental import enable_iterative_imputer  # noqa
+    from sklearn.datasets import fetch_california_housing
+    from sklearn.impute import IterativeImputer
+    from sklearn.linear_model import BayesianRidge
+    from sklearn.tree import DecisionTreeRegressor
+    from sklearn.ensemble import ExtraTreesRegressor
+    from sklearn.neighbors import KNeighborsRegressor
+    
 
 
-pipeline = make_pipeline(Transformer_Switcher() , XGBRegressor())
+    
+    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/regression/results/pickles')   
+    
+    combined_categorical_df = database.load('combined_categorical_df')
+    combined_continuous_df = database.load('combined_continuous_df')
+    y_train = database.load('y_train')
+    
+    joint_df = database.load('joint_df')
+    
+    
+    
+    pipeline = make_pipeline(Transformer_Switcher() , XGBRegressor())
+    
+    
+    grid_search_params = [
+        {
+            'transformer_switcher__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'transformer_switcher__transformer__estimator' : [BayesianRidge()]
+        },
+        {
+            'transformer_switcher__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'transformer_switcher__transformer__estimator' : [DecisionTreeRegressor(max_features='sqrt', random_state=0)]
+        },
+         
+        {
+            'transformer_switcher__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'transformer_switcher__transformer__estimator' : [ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0)]
+        },
+    
+        {
+            'transformer_switcher__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'transformer_switcher__transformer__estimator' : [KNeighborsRegressor(n_neighbors=4)]
+            
+        },
+    
+    ]
+    
+    
+    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 5, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 3)
+    grid_search_estimator.fit(joint_df, y_train)
+  
+    results = grid_search_estimator.cv_results_
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+#    scoring = {'AUC': 'roc_auc', 'Accuracy': make_scorer(accuracy_score)}
+#
+#
+#    import matplotlib.pyplot as plt
+#    
+#    import numpy as np
+#    from matplotlib import pyplot as plt
+#    
+#    from sklearn.datasets import make_hastie_10_2
+#    from sklearn.model_selection import GridSearchCV
+#    from sklearn.metrics import make_scorer
+#    from sklearn.metrics import accuracy_score
+#    from sklearn.tree import DecisionTreeClassifier
+#
+#
+#    plt.figure(figsize=(13, 13))
+#    plt.title("GridSearchCV evaluating using multiple scorers simultaneously",
+#              fontsize=16)
+#    
+#    plt.xlabel("min_samples_split")
+#    plt.ylabel("Score")
+#    
+#    ax = plt.gca()
+#    ax.set_xlim(0, 402)
+#    ax.set_ylim(0.73, 1)
+#    
+#    # Get the regular numpy array from the MaskedArray
+#    X_axis = np.array(results['mean_test_score'].data, dtype=float)
+#    
+#    for scorer, color in zip(sorted(scoring), ['g', 'k']):
+#        for sample, style in (('train', '--'), ('test', '-')):
+#            sample_score_mean = results['mean_%s_%s' % (sample, scorer)]
+#            sample_score_std = results['std_%s_%s' % (sample, scorer)]
+#            ax.fill_between(X_axis, sample_score_mean - sample_score_std,
+#                            sample_score_mean + sample_score_std,
+#                            alpha=0.1 if sample == 'test' else 0, color=color)
+#            ax.plot(X_axis, sample_score_mean, style, color=color,
+#                    alpha=1 if sample == 'test' else 0.7,
+#                    label="%s (%s)" % (scorer, sample))
+#    
+#        best_index = np.nonzero(results['rank_test_%s' % scorer] == 1)[0][0]
+#        best_score = results['mean_test_%s' % scorer][best_index]
+#    
+#        # Plot a dotted vertical line at the best score for that scorer marked by x
+#        ax.plot([X_axis[best_index], ] * 2, [0, best_score],
+#                linestyle='-.', color=color, marker='x', markeredgewidth=3, ms=8)
+#    
+#        # Annotate the best score for that scorer
+#        ax.annotate("%0.2f" % best_score,
+#                    (X_axis[best_index], best_score + 0.005))
+#    
+#    plt.legend(loc="best")
+#    plt.grid(False)
+#    plt.show()
 
 
-transformer_switcher_params_1 =      {
-                                        'class_name' : sklearn.impute.IterativeImputer,
-                                        'random_state' : 0,
-                                        'estimator' : BayesianRidge()
-                                   }
 
 
 
 
-parameters = [
-    {
-        'transformer_switcher__transformer': [sklearn.impute.IterativeImputer()], # SVM if hinge loss / logreg if log loss
-        'transformer_switcher__transformer__estimator' : [BayesianRidge()],
-    },
-    {
-        'transformer_switcher__transformer': [sklearn.impute.IterativeImputer()], # SVM if hinge loss / logreg if log loss
-        'transformer_switcher__transformer__estimator' : [DecisionTreeRegressor(max_features='sqrt', random_state=0)],
-    },
-     
-    {
-        'transformer_switcher__transformer': [sklearn.impute.IterativeImputer()], # SVM if hinge loss / logreg if log loss
-        'transformer_switcher__transformer__estimator' : [ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0)]
-    },
-
-    {
-        'transformer_switcher__transformer': [sklearn.impute.IterativeImputer()], # SVM if hinge loss / logreg if log loss
-        'transformer_switcher__transformer__estimator' : [KNeighborsRegressor(n_neighbors=4)],
-        
-    },
-
-]
-
-
-
-
-gscv = GridSearchCV(pipeline, parameters, cv=10, n_jobs=-1, verbose=3, scoring = global_scoring)
-# param optimization
-gscv.fit(joint_df, y_train)
-
-t = gscv.cv_results_
-
-
-estimator.get_params().keys()
-
-
-
-
-
-
-
-
-
-
-
-
-
-impute_estimators = [
-    BayesianRidge(),
-    DecisionTreeRegressor(max_features='sqrt', random_state=0),
-    ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0),    
-    KNeighborsRegressor(n_neighbors=4)
-]
-
-
-
-# explicitly require this experimental feature
-from sklearn.experimental import enable_iterative_imputer  # noqa
-# now you can import normally from sklearn.impute
-from sklearn.impute import IterativeImputer
-
-import sklearn
-
-DecisionTreeRegressor_params =      {
-                                        'max_features' : 'sqrt', 
-                                        'random_state' : 0
-                                    }
-
-
-#IterativeImputer(random_state=0, estimator=impute_estimator)
-transformer_switcher_params_1 =      {
-                                        'class_name' : sklearn.impute.IterativeImputer,
-                                        'random_state' : 0,
-                                        'estimator' : BayesianRidge()
-                                   }
-
-
-transformer_switcher_params_2 =      {
-                                        'class_name' : sklearn.impute.IterativeImputer,
-                                        'random_state' : 0,
-                                        'estimator' : DecisionTreeRegressor(max_features='sqrt', random_state=0)
-                                   }
-
-
-
-
-from sklearn.pipeline import Pipeline
-
-
-#steps = [('Transformer_Switcher', Transformer_Switcher(transformer_switcher_params_1)), ('XGBoost', XGBRegressor())]
-#all_pipelines = Pipeline(steps)
-
-
-all_pipelines = make_pipeline(Transformer_Switcher(transformer_switcher_params_1) , XGBRegressor())
-
-
-
-all_pipelines.fit(joint_df, y_train)
-
-all_pipelines.predict(joint_df)
+#
+#
+#
+#impute_estimators = [
+#    BayesianRidge(),
+#    DecisionTreeRegressor(max_features='sqrt', random_state=0),
+#    ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0),    
+#    KNeighborsRegressor(n_neighbors=4)
+#]
+#
+#
+#
+## explicitly require this experimental feature
+#from sklearn.experimental import enable_iterative_imputer  # noqa
+## now you can import normally from sklearn.impute
+#from sklearn.impute import IterativeImputer
+#
+#import sklearn
+#
+#DecisionTreeRegressor_params =      {
+#                                        'max_features' : 'sqrt', 
+#                                        'random_state' : 0
+#                                    }
+#
+#
+##IterativeImputer(random_state=0, estimator=impute_estimator)
+#transformer_switcher_params_1 =      {
+#                                        'class_name' : sklearn.impute.IterativeImputer,
+#                                        'random_state' : 0,
+#                                        'estimator' : BayesianRidge()
+#                                   }
+#
+#
+#transformer_switcher_params_2 =      {
+#                                        'class_name' : sklearn.impute.IterativeImputer,
+#                                        'random_state' : 0,
+#                                        'estimator' : DecisionTreeRegressor(max_features='sqrt', random_state=0)
+#                                   }
+#
+#
+#
+#
+#from sklearn.pipeline import Pipeline
+#
+#
+##steps = [('Transformer_Switcher', Transformer_Switcher(transformer_switcher_params_1)), ('XGBoost', XGBRegressor())]
+##all_pipelines = Pipeline(steps)
+#
+#
+#all_pipelines = make_pipeline(Transformer_Switcher(transformer_switcher_params_1) , XGBRegressor())
+#
+#
+#
+#all_pipelines.fit(joint_df, y_train)
+#
+#all_pipelines.predict(joint_df)
 
 
 #
