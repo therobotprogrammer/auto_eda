@@ -44,7 +44,7 @@ from sklearn.impute import SimpleImputer
 
 
 
-class Transformer_Switcher(BaseEstimator, TransformerMixin):
+class GoWide(BaseEstimator, TransformerMixin):
     def __init__(self, transformer = SimpleImputer()):
         """
         A Custom BaseEstimator that can switch between classifiers.
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     from sklearn.tree import DecisionTreeRegressor
     from sklearn.ensemble import ExtraTreesRegressor
     from sklearn.neighbors import KNeighborsRegressor
-    
+    import numpy as np
 
 
     
@@ -91,27 +91,36 @@ if __name__ == '__main__':
     
     
     
-    pipeline = make_pipeline(Transformer_Switcher() , XGBRegressor())
-    
+    pipeline = make_pipeline(GoWide() , XGBRegressor())
+
+        
     
     grid_search_params = [
         {
-            'transformer_switcher__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'transformer_switcher__transformer__estimator' : [BayesianRidge()]
+            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'gowide__transformer__estimator' : [BayesianRidge()]
         },
         {
-            'transformer_switcher__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'transformer_switcher__transformer__estimator' : [DecisionTreeRegressor(max_features='sqrt', random_state=0)]
+            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'gowide__transformer__estimator' : [DecisionTreeRegressor(max_features='sqrt', random_state=0)]
         },
          
         {
-            'transformer_switcher__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'transformer_switcher__transformer__estimator' : [ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0)]
+            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'gowide__transformer__estimator' : [ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0)]
         },
     
         {
-            'transformer_switcher__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'transformer_switcher__transformer__estimator' : [KNeighborsRegressor(n_neighbors=4)]
+            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'gowide__transformer__estimator' : [ExtraTreesRegressor()],
+            'gowide__transformer__estimator__n_estimators' : [1],
+            'gowide__transformer__estimator__n_jobs' : [-1]
+        },
+        
+        
+        {
+            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+            'gowide__transformer__estimator' : [KNeighborsRegressor(n_neighbors=4)]
             
         },
     
