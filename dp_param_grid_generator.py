@@ -6,18 +6,28 @@ Created on Tue Aug 13 15:39:15 2019
 @author: pt
 """
 
+
+
+import itertools
+import numpy as np
+
+
 ExtraTreesRegressor_params = {
                                     'max_depth': [1, 2, 3], 
                                     'n_estimators': [1,10,100,1000]
                              }
 
 
+KNeighborsRegressor_params = {
+                                'n_neighbors' : [4]
+                            }
+
 
 estimator_list = [   
-                    'BayesianRidge()', 
-                    'DecisionTreeRegressor()',                    
-                    'KNeighborsRegressor()',
-                    {'ExtraTreesRegressor()' : ExtraTreesRegressor_params}
+                    BayesianRidge(),
+                    DecisionTreeRegressor(),                    
+                    {KNeighborsRegressor() : KNeighborsRegressor_params},
+                    {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                 ]
 
 
@@ -27,12 +37,18 @@ iterative_imputer_params =  {
                             }
 
 
+iterative_imputer_dict = {
+                            IterativeImputer() : iterative_imputer_params
+                        }
+
+grid_params = {
+                    'transformer' : iterative_imputer_dict
+                }
+
+
 param_list = []
 
 curr_dict = iterative_imputer_params
-
-
-import itertools
 
 
 
@@ -41,16 +57,33 @@ def dp(curr_item = None, prefix = '', depth = 0):
         params = []
         for key, value in curr_item.items():
             local_params = [] 
-            print(key, ':', value)            
-            res = dp(curr_item = value, prefix = prefix + '__'+ key, depth = depth+1)
+            print(key, ':', value)   
             
+            if type(key) == str:                
+                res = dp(curr_item = value, prefix = prefix + '__'+ key, depth = depth+1)
+            else:
+                #key is assumed to be a function
+                estimator_key_value = {prefix: [key]}
+                
+                print('>>', estimator_key_value)
+                res = dp(curr_item = value, prefix = prefix , depth = depth+1)
+                
+                for sub_dict in res:
+                    sub_dict.update(estimator_key_value)
+#                res.append(estimator_key_value)
+                print('>>>>', res)       
+                
+#                res.update(estimator_key_value)
             params.append(res)
             
 #        r = list(itertools.product(params))
 
         permutations = []
+        
         for element in itertools.product(*params):
+            
             d = {}
+            
             
             for dict_value in element:
                 d.update(dict_value)
@@ -103,12 +136,12 @@ def dp(curr_item = None, prefix = '', depth = 0):
     else:
 #        print(prefix , ':', curr_item)
 #        print()
-        return {prefix: curr_item}
+        return {prefix: [curr_item]}
         
         
-temp = dp(curr_dict)
+grid_search_params_dp = dp(grid_params, prefix = 'gowide')
 
-print(temp)
+print(grid_search_params_dp)
 
 
 

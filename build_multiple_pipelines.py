@@ -41,6 +41,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import make_pipeline
 from sklearn.impute import SimpleImputer
 
+from pydispatch import Dispatcher
+
 
 
 
@@ -50,6 +52,12 @@ class GoWide(BaseEstimator, TransformerMixin):
         A Custom BaseEstimator that can switch between classifiers.
         :param estimator: sklearn object - The classifier
         """ 
+        if type(transformer) == str:
+            #extract transformer function from string. Grid search object gives string. 
+#            try:
+            transformer=eval(transformer)()
+#            except KeyError:
+#                raise ValueError('invalid input')
         self.transformer = transformer
             
     def fit(self, X, y=None):
@@ -120,15 +128,22 @@ if __name__ == '__main__':
         
         {
             'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'gowide__transformer__estimator' : [KNeighborsRegressor(n_neighbors=4)]
+            'gowide__transformer__estimator' : [KNeighborsRegressor(n_neighbors=3)]
             
         },
     
     ]
     
-    
-    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 5, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 3)
+
+
+    grid_search_estimator = GridSearchCV(pipeline, grid_search_params_dp, cv = 5, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 3)
+
+    import time
+    t1 = time.time()
     grid_search_estimator.fit(joint_df, y_train)
+    t2 = time.time()
+    
+    print('Not Nested n_jobs', t2-t1)
   
     results = grid_search_estimator.cv_results_
     
