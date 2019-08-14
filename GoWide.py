@@ -6,42 +6,64 @@ Created on Wed Aug  7 11:51:14 2019
 @author: pt
 """
 import pandas as pd
-
-#
-#
-#a =     [
-#            BayesianRidge(),
-#            DecisionTreeRegressor(max_features='sqrt', random_state=0),
-#            ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0),    
-#            KNeighborsRegressor(n_neighbors=4)
-#        ]
-#
-#
-#b = ['1', '2', '3', '4']
-#c = ['!', '@', '#']
-#
-#df = pd.DataFrame(columns= ['column_a','column_b', 'column_c'])
-#
-#
-#pipeline_combinations = []
-#
-#count = 10
-#
-#for pipeline_name in itertools.product(a, b,c):
-#    pipeline_combinations.append(pipeline_name)
-#
-#pipeline_combinations_df = pd.DataFrame(pipeline_combinations)
-#
-#
-# 
-
-
-
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import make_pipeline
 from sklearn.impute import SimpleImputer
 
-from pydispatch import Dispatcher
+import itertools
+import numpy as np
+
+
+def gererate_params(config_dict):
+    generated_params = __dp(config_dict)
+    return generated_params
+
+def __dp(curr_item = None, prefix = '', depth = 0):
+    if type(curr_item) == dict:
+        params = []
+        for key, value in curr_item.items():            
+            if type(key) == str:
+                if prefix == '':
+                    res = __dp(curr_item = value, prefix = key, depth = depth+1)
+                    
+                else:
+                    res = __dp(curr_item = value, prefix = prefix + '__'+ key, depth = depth+1)
+            else:
+                #key is assumed to be a function
+                estimator_key_value = {prefix: [key]}
+                res = __dp(curr_item = value, prefix = prefix , depth = depth+1)
+                
+                for sub_dict in res:
+                    sub_dict.update(estimator_key_value)
+            params.append(res)
+            
+        permutations = []
+        
+        for element in itertools.product(*params):           
+            d = {}     
+            for dict_value in element:
+                d.update(dict_value)            
+            permutations.append(d)
+        return permutations        
+                
+    elif type(curr_item) == list:
+        params = []        
+        for value in curr_item:                
+#            if type(value) == tuple:
+#                res = __dp(curr_item = value[1], prefix = prefix + '__'+ value[0], depth = depth+1)
+#            else:                
+            res = __dp(value, prefix , depth = depth+1)
+            if type(res) == list:
+                for item in res:
+                    params.append(item)
+            else:
+                params.append(res)
+        return params
+        
+    else:
+        return {prefix: [curr_item]}
+
+
 
 
 
@@ -53,11 +75,7 @@ class GoWide(BaseEstimator, TransformerMixin):
         :param estimator: sklearn object - The classifier
         """ 
         if type(transformer) == str:
-            #extract transformer function from string. Grid search object gives string. 
-#            try:
             transformer=eval(transformer)()
-#            except KeyError:
-#                raise ValueError('invalid input')
         self.transformer = transformer
             
     def fit(self, X, y=None):
@@ -97,53 +115,64 @@ if __name__ == '__main__':
     
     joint_df = database.load('joint_df')
     
+
+
+    ExtraTreesRegressor_params =    {
+                                        'max_depth': [1, 2, 3], 
+                                        'n_estimators': [1,10,100,1000]
+                                    }
+    
+    
+    KNeighborsRegressor_params =    {
+                                        'n_neighbors' : [4]
+                                    }
+    
+    
+    estimator_list =                [   
+                                        BayesianRidge(),
+                                        DecisionTreeRegressor(),
+                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
+                                    ]
+    
+    
+    iterative_imputer_params =      {
+                                        'estimator' : estimator_list,
+                                        'missing_values' : [np.nan]                                                   
+                                    }
+    
+    
+    iterative_imputer_dict =        {
+                                        IterativeImputer() : iterative_imputer_params
+                                    }
+    
+    
+    gowide_params =                 {
+                                        'transformer' : iterative_imputer_dict
+                                    }
+    
+    
+    config_dict =                   {   
+                                        'gowide' : gowide_params
+                                    }    
+    
     
     
     pipeline = make_pipeline(GoWide() , XGBRegressor())
 
-        
-    
-    grid_search_params = [
-        {
-            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'gowide__transformer__estimator' : [BayesianRidge()]
-        },
-        {
-            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'gowide__transformer__estimator' : [DecisionTreeRegressor(max_features='sqrt', random_state=0)]
-        },
-         
-        {
-            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'gowide__transformer__estimator' : [ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0)]
-        },
-    
-        {
-            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'gowide__transformer__estimator' : [ExtraTreesRegressor()],
-            'gowide__transformer__estimator__n_estimators' : [1],
-            'gowide__transformer__estimator__n_jobs' : [-1]
-        },
-        
-        
-        {
-            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
-            'gowide__transformer__estimator' : [KNeighborsRegressor(n_neighbors=3)]
-            
-        },
-    
-    ]
-    
+    grid_search_params = gererate_params(config_dict)
+
+    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 5, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 3)
 
 
-    grid_search_estimator = GridSearchCV(pipeline, grid_search_params_dp, cv = 5, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 3)
+
 
     import time
     t1 = time.time()
     grid_search_estimator.fit(joint_df, y_train)
     t2 = time.time()
     
-    print('Not Nested n_jobs', t2-t1)
+    print('Time Taken:', t2-t1)
   
     results = grid_search_estimator.cv_results_
     
@@ -155,7 +184,61 @@ if __name__ == '__main__':
     
     
     
+ 
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+#        
+#    
+#    grid_search_params = [
+#        {
+#            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+#            'gowide__transformer__estimator' : [BayesianRidge()]
+#        },
+#        {
+#            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+#            'gowide__transformer__estimator' : [DecisionTreeRegressor(max_features='sqrt', random_state=0)]
+#        },
+#         
+#        {
+#            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+#            'gowide__transformer__estimator' : [ExtraTreesRegressor(n_estimators=100, max_depth = 1, random_state=0)]
+#        },
+#    
+#        {
+#            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+#            'gowide__transformer__estimator' : [ExtraTreesRegressor()],
+#            'gowide__transformer__estimator__n_estimators' : [1],
+#            'gowide__transformer__estimator__n_jobs' : [-1]
+#        },
+#        
+#        
+#        {
+#            'gowide__transformer': [IterativeImputer()], # SVM if hinge loss / logreg if log loss
+#            'gowide__transformer__estimator' : [KNeighborsRegressor(n_neighbors=3)]
+#            
+#        },
+#    
+#    ]
+#    
+#
+
     
     
     
