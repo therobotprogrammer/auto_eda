@@ -98,7 +98,8 @@ pio.renderers.default = "browser"
 
 
 
-
+#Set Numpy Random Seed. This also saves a lot of time & space when using precomputed pipelines
+np.random.seed(0)
 
 global_problem_type = 'regression'
 auto_generated_data_df_dropped = pd.DataFrame()

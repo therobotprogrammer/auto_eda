@@ -7,7 +7,7 @@ Created on Wed Aug  7 11:51:14 2019
 """
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.impute import SimpleImputer
 
 import itertools
@@ -104,7 +104,10 @@ if __name__ == '__main__':
     from sklearn.ensemble import ExtraTreesRegressor
     from sklearn.neighbors import KNeighborsRegressor
     import numpy as np
+    np.random.seed(0)
 
+    #reimport because if an issue where pickle cannot find a class not part of __main__
+    from GoWide import GoWide
 
     
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/regression/results/pickles')   
@@ -115,30 +118,32 @@ if __name__ == '__main__':
     
     joint_df = database.load('joint_df')
     
+    
+    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
 
 
     ExtraTreesRegressor_params =    {
                                         'max_depth': [1, 2, 3], 
-                                        'n_estimators': [1,10,100,1000]
+                                        'n_estimators': [1,10,100,1000],
                                     }
     
     
     KNeighborsRegressor_params =    {
-                                        'n_neighbors' : [4]
+                                        'n_neighbors' : [2],
                                     }
     
     
     estimator_list =                [   
                                         BayesianRidge(),
                                         DecisionTreeRegressor(),
-                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+#                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
                                         {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                                     ]
     
     
     iterative_imputer_params =      {
                                         'estimator' : estimator_list,
-                                        'missing_values' : [np.nan]                                                   
+                                        'missing_values' : [np.nan],
                                     }
     
     
@@ -157,12 +162,17 @@ if __name__ == '__main__':
                                     }    
     
     
+    steps = [
+                ('gowide' , GoWide() ), 
+                ('xgb' , XGBRegressor() ) 
+            ]
     
-    pipeline = make_pipeline(GoWide() , XGBRegressor())
+    pipeline = Pipeline( memory = memory, steps = steps)
 
     grid_search_params = gererate_params(config_dict)
 
-    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 5, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 3)
+
+    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 10, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 1)
 
 
 
