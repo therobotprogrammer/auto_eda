@@ -21,6 +21,8 @@ import plotly.io as pio
 pio.renderers
 pio.renderers.default = "browser"
 
+import plotly.express as px
+
 
 
 class Plotter:
@@ -140,7 +142,6 @@ class Plotter:
 
 
     def parallel_plot(self, input_df, target, message, labels_dict = None):
-
         combined_local_df = input_df.join( target, how = 'outer')      
     
         if isinstance(target, pd.DataFrame):    
@@ -153,14 +154,9 @@ class Plotter:
         fig = px.parallel_coordinates(combined_local_df, color=target_name, labels=labels_dict,
                                      color_continuous_scale=px.colors.diverging.Tealrose,
                                      color_continuous_midpoint=2 )
-        #fig.show()
-        
-        
 
-            
         filename = os.path.join(self.current_directory, message + '_parallel_plot.html')   
         plotly.offline.plot(fig, show_link = True, filename = filename)
-    
 
 
 
@@ -186,15 +182,10 @@ if __name__ == '__main__':
     plotter = Plotter(plot_dir)    
     plotter.parallel_plot(combined_continuous_df, target, message = 'House Price - continuous data')
 
-
-
-import plotly.express as px
-
-tips = px.data.tips()
-fig = px.parallel_categories(tips, dimensions=['sex', 'smoker', 'day'], 
-                color="size", color_continuous_scale=px.colors.sequential.Inferno,
-                labels={'sex':'Payer sex', 'smoker':'Smokers at the table', 'day':'Day of week'})
-fig.show()
+#    plotter = Plotter(plot_dir)    
+#    plotter.parallel_plot(parameters_to_plot,  results['mean_test_score'], message = 'House Price - continuous data')
+#
+#    
 
 
 

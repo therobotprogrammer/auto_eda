@@ -90,6 +90,9 @@ class GoWide(BaseEstimator, TransformerMixin):
 
 
 if __name__ == '__main__':
+    from mlflow import log_metric, log_param, log_artifacts
+
+
     import sys
     sys.path.insert(0, '/home/pt/Documents/auto_eda')   
     from SaveAndLoad import SaveAndLoad
@@ -136,7 +139,7 @@ if __name__ == '__main__':
     estimator_list =                [   
                                         BayesianRidge(),
                                         DecisionTreeRegressor(),
-#                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
                                         {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                                     ]
     
@@ -175,6 +178,7 @@ if __name__ == '__main__':
     grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 10, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 1)
 
 
+    
 
 
     import time
@@ -186,24 +190,87 @@ if __name__ == '__main__':
   
     results = grid_search_estimator.cv_results_
     
+
+   
+    parameters_to_plot = pd.DataFrame(results['params'])
+    results_to_plot = pd.DataFrame()
+
+    parameters_to_plot['mean_test_score'] = results['mean_test_score']
+#    
+#    parameters_to_plot['mean_score_time'] = results['mean_score_time']
+    
+    
+    for key, value in results.items():
+        if type(results[key] ) == np.ndarray:
+            results_to_plot[key] = value
+            
+    
+    import numbers
+    
+
+    def convert_functions_to_class_names(df_local):
+        for column_idx, column in enumerate(df_local.columns):
+            for row_idx, value in enumerate(df_local[column]) :
+                cell_value = df_local.iloc[row_idx, column_idx]
+                if not (isinstance(cell_value, str) or isinstance(cell_value, numbers.Number) ):
+                    try:
+                        df_local.iloc[row_idx, column_idx] = type(cell_value).__name__
+                        print(cell_value)
+                    except:
+                        df_local.iloc[row_idx, column_idx] = str(cell_value)
+    
+        return df_local
+    
+    
+    parameters_to_plot =  convert_functions_to_class_names(parameters_to_plot)
+    
+    
+
     
     
     
+    def remove_variance(df):
+        df_local = df.copy()
+        
+        df_local = df_local.dropna(axis = 1, how = 'all')
+        
+        columns_with_no_varience = []
+        
+        
+        for column in df_local.columns:
+            group_obj =  df_local.groupby(column)
+            
+            group_count_in_column = group_obj.count().shape[0]
+
+            if group_count_in_column == 1:
+                columns_with_no_varience.append(column)
+                
+        df_local = df_local.drop(columns_with_no_varience, axis = 1)
+        
+        return df_local
     
     
     
+    parameters_to_plot = remove_variance(parameters_to_plot)
     
     
- 
-    
-    
-    
-    
-    
-    
+    from Plotter import Plotter
+    plot_dir = '/media/pt/hdd/Auto EDA Results/unit_tests/plots'
+    plotter = Plotter(plot_dir)    
+#    plotter.parallel_plot(parameters_to_plot, results['mean_test_score'], message = 'iris')
     
     
     
+    import plotly.express as px
+#    tips = px.data.tips()
+    parameters_to_plot['mean_test_score'] = results['mean_test_score']
+
+    parameters_to_plot = parameters_to_plot.sort_values('mean_test_score', ascending = False)
+    fig = px.parallel_categories(parameters_to_plot)
+    
+    fig.show()
+
+        
     
     
     
