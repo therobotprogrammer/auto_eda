@@ -29,8 +29,9 @@ class Plotter:
         if not os.path.isdir(top_save_directory):
             os.makedirs(top_save_directory)
             
-        self.top_save_directory = top_save_directory        
-        self.set_current_dir('')
+        self.top_save_directory = top_save_directory  
+        self.current_directory  = top_save_directory
+#        self.set_current_dir('')
         
         
     def set_current_dir(self, local_folder_name): 
@@ -135,3 +136,66 @@ class Plotter:
         
     def box_plot_df(self, df_local, message = ''):
         df_local.iplot(kind='box', boxpoints='outliers', title = message + ' - Box Plot')
+
+
+
+    def parallel_plot(self, input_df, target, message, labels_dict = None):
+
+        combined_local_df = input_df.join( target, how = 'outer')      
+    
+        if isinstance(target, pd.DataFrame):    
+            target_name = target.columns[0]
+            
+        else:
+            #target is a series
+            target_name = target.name
+
+        fig = px.parallel_coordinates(combined_local_df, color=target_name, labels=labels_dict,
+                                     color_continuous_scale=px.colors.diverging.Tealrose,
+                                     color_continuous_midpoint=2 )
+        #fig.show()
+        
+        
+
+            
+        filename = os.path.join(self.current_directory, message + '_parallel_plot.html')   
+        plotly.offline.plot(fig, show_link = True, filename = filename)
+    
+
+
+
+if __name__ == '__main__':
+    import sys
+    sys.path.insert(0, '/home/pt/Documents/auto_eda')   
+    from SaveAndLoad import SaveAndLoad    
+    import plotly.express as px
+    import plotly
+
+    iris = px.data.iris()    
+    target = iris['species_id']
+    iris_df = iris.drop(['species', 'species_id'], axis = 1)   
+    
+    plot_dir = '/media/pt/hdd/Auto EDA Results/unit_tests/plots'
+    plotter = Plotter(plot_dir)    
+    plotter.parallel_plot(iris_df, target, message = 'iris')
+
+    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/regression/results/pickles')   
+    target = database.load('y_train')  
+    combined_continuous_df = database.load('combined_continuous_df')
+
+    plotter = Plotter(plot_dir)    
+    plotter.parallel_plot(combined_continuous_df, target, message = 'House Price - continuous data')
+
+
+
+import plotly.express as px
+
+tips = px.data.tips()
+fig = px.parallel_categories(tips, dimensions=['sex', 'smoker', 'day'], 
+                color="size", color_continuous_scale=px.colors.sequential.Inferno,
+                labels={'sex':'Payer sex', 'smoker':'Smokers at the table', 'day':'Day of week'})
+fig.show()
+
+
+
+
