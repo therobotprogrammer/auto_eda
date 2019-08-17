@@ -13,10 +13,16 @@ from sklearn.impute import SimpleImputer
 import itertools
 import numpy as np
 
+from Plotter import Plotter
+import numbers
+    
+
+
 
 def gererate_params(config_dict):
     generated_params = __dp(config_dict)
     return generated_params
+
 
 def __dp(curr_item = None, prefix = '', depth = 0):
     if type(curr_item) == dict:
@@ -65,10 +71,84 @@ def __dp(curr_item = None, prefix = '', depth = 0):
 
 
 
+   
+def __get_params_and_scores(results):        
+    parameters_to_plot = pd.DataFrame(results['params'])
+    scores = pd.DataFrame()
+
+    for key, value in results.items():
+        if type(results[key] ) == np.ndarray:
+            scores[key] = value
+
+    processed_results_dict = {}
+    processed_results_dict['parameters_to_plot'] = parameters_to_plot
+    processed_results_dict['scores'] = scores
+    
+    return processed_results_dict
 
 
+def __convert_functions_to_class_names(processed_results_dict):
+    df_local = processed_results_dict['parameters_to_plot'].copy()
+#    locations_of_functions_mask = pd.DataFrame(np.zeros((df_local.shape[0], df_local.shape[0])))
 
-class GoWide(BaseEstimator, TransformerMixin):
+#    locations_of_functions_mask = pd.DataFrame(0, index=range(df_local.shape[0]), columns=range(df_local.shape[1])))
+
+    total_rows = df_local.shape[0]
+    total_cols = df_local.shape[1]
+    function_locations = pd.DataFrame(False, index=range(total_rows), columns=range(total_cols))
+
+
+    for column_idx, column in enumerate(df_local.columns):
+        for row_idx, value in enumerate(df_local[column]) :
+            cell_value = df_local.iloc[row_idx, column_idx]
+            if not (isinstance(cell_value, str) or isinstance(cell_value, numbers.Number) ):
+                try:
+                    df_local.iloc[row_idx, column_idx] = type(cell_value).__name__
+                    function_locations.iloc[row_idx, column_idx] = True
+                    
+                except:
+                    df_local.iloc[row_idx, column_idx] = str(cell_value)
+                    
+    processed_results_dict['parameters_to_plot'] = df_local
+    processed_results_dict['function_locations'] = function_locations
+                
+    return processed_results_dict
+
+
+def __remove_variance(processed_results_dict, compact_version = False):
+    temp_df = processed_results_dict['parameters_to_plot'].copy()        
+#    temp_df = temp_df.dropna(axis = 1, how = 'all')  
+
+    if not compact_version:
+        temp_df = temp_df.fillna('##MISSING##')
+          
+    columns_with_no_varience = []        
+    
+    for column in temp_df.columns:
+        group_obj =  temp_df.groupby(column, observed = True)            
+        group_count_in_column = group_obj.count().shape[0]
+
+        if group_count_in_column < 2:
+            columns_with_no_varience.append(column)   
+            
+    res_df = processed_results_dict['parameters_to_plot'].copy()
+    res_df = res_df.drop(columns_with_no_varience, axis = 1)     
+    processed_results_dict['parameters_to_plot'] = res_df
+    return processed_results_dict    
+
+
+def process_results(cv_results, compact_version = False):
+    processed_results_dict = __get_params_and_scores(cv_results)
+    processed_results_dict =  __convert_functions_to_class_names(processed_results_dict)
+    processed_results_dict = __remove_variance(processed_results_dict, compact_version)
+    
+
+    return processed_results_dict
+
+    
+
+
+class MultiTf(BaseEstimator, TransformerMixin):
     def __init__(self, transformer = SimpleImputer()):
         """
         A Custom BaseEstimator that can switch between classifiers.
@@ -110,9 +190,11 @@ if __name__ == '__main__':
     np.random.seed(0)
 
     #reimport because if an issue where pickle cannot find a class not part of __main__
-    from GoWide import GoWide
+    from GoWide import MultiTf
+    import time
 
-    
+
+
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/regression/results/pickles')   
     
     combined_categorical_df = database.load('combined_categorical_df')
@@ -155,122 +237,70 @@ if __name__ == '__main__':
                                     }
     
     
-    gowide_params =                 {
-                                        'transformer' : iterative_imputer_dict
+    simple_imputer_params =         {
+                                        'strategy' : ['mean', 'median', 'most_frequent']
+                                    }
+    
+    
+    simple_imputer_dict =           {
+                                        SimpleImputer() : simple_imputer_params
+                                    }
+    
+    
+    multitf_params =                {
+                                        'transformer' : [iterative_imputer_dict, simple_imputer_dict]
                                     }
     
     
     config_dict =                   {   
-                                        'gowide' : gowide_params
+                                        'multitf' : multitf_params
                                     }    
     
     
     steps = [
-                ('gowide' , GoWide() ), 
+                ('multitf' , MultiTf() ), 
                 ('xgb' , XGBRegressor() ) 
             ]
     
-    pipeline = Pipeline( memory = memory, steps = steps)
-
-    grid_search_params = gererate_params(config_dict)
-
-
-    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 10, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 1)
-
-
     
-
-
-    import time
+    pipeline = Pipeline( memory = memory, steps = steps)
+    grid_search_params = gererate_params(config_dict)
+    
+    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 10, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 0)
     t1 = time.time()
     grid_search_estimator.fit(joint_df, y_train)
-    t2 = time.time()
-    
+    t2 = time.time()    
     print('Time Taken:', t2-t1)
   
-    results = grid_search_estimator.cv_results_
-    
-
-   
-    parameters_to_plot = pd.DataFrame(results['params'])
-    results_to_plot = pd.DataFrame()
-
-    parameters_to_plot['mean_test_score'] = results['mean_test_score']
-#    
-#    parameters_to_plot['mean_score_time'] = results['mean_score_time']
-    
-    
-    for key, value in results.items():
-        if type(results[key] ) == np.ndarray:
-            results_to_plot[key] = value
-            
-    
-    import numbers
-    
-
-    def convert_functions_to_class_names(df_local):
-        for column_idx, column in enumerate(df_local.columns):
-            for row_idx, value in enumerate(df_local[column]) :
-                cell_value = df_local.iloc[row_idx, column_idx]
-                if not (isinstance(cell_value, str) or isinstance(cell_value, numbers.Number) ):
-                    try:
-                        df_local.iloc[row_idx, column_idx] = type(cell_value).__name__
-                        print(cell_value)
-                    except:
-                        df_local.iloc[row_idx, column_idx] = str(cell_value)
-    
-        return df_local
-    
-    
-    parameters_to_plot =  convert_functions_to_class_names(parameters_to_plot)
-    
-    
+    cv_results = grid_search_estimator.cv_results_
 
     
-    
-    
-    def remove_variance(df):
-        df_local = df.copy()
-        
-        df_local = df_local.dropna(axis = 1, how = 'all')
-        
-        columns_with_no_varience = []
-        
-        
-        for column in df_local.columns:
-            group_obj =  df_local.groupby(column)
-            
-            group_count_in_column = group_obj.count().shape[0]
+    processed_results_dict= process_results(cv_results, compact_version = False)
 
-            if group_count_in_column == 1:
-                columns_with_no_varience.append(column)
-                
-        df_local = df_local.drop(columns_with_no_varience, axis = 1)
-        
-        return df_local
-    
-    
-    
-    parameters_to_plot = remove_variance(parameters_to_plot)
-    
-    
-    from Plotter import Plotter
     plot_dir = '/media/pt/hdd/Auto EDA Results/unit_tests/plots'
-    plotter = Plotter(plot_dir)    
-#    plotter.parallel_plot(parameters_to_plot, results['mean_test_score'], message = 'iris')
-    
-    
-    
-    import plotly.express as px
-#    tips = px.data.tips()
-    parameters_to_plot['mean_test_score'] = results['mean_test_score']
+    plotter = Plotter(plot_dir)        
+    plotter.parallel_categories(processed_results_dict['parameters_to_plot'] , processed_results_dict['scores'], score_name_to_plot = 'mean_test_score')
 
-    parameters_to_plot = parameters_to_plot.sort_values('mean_test_score', ascending = False)
-    fig = px.parallel_categories(parameters_to_plot)
     
-    fig.show()
+    def sub_plots(parameters_to_plot, scores):
+        parameters_to_plot = processed_results_dict['parameters_to_plot']        
+        scores = processed_results_dict['scores'] 
+        function_locations = processed_results_dict['function_locations'] 
+        
+        for column in parameters_to_plot.columns:
+            group_obj =  parameters_to_plot.groupby(column, observed = True)            
+            group_count_in_column = group_obj.count().shape[0]        
+            
+#            mask = parameters_to_plot.notnull()
+            #this should be always be > 1
+#            if group_count_in_column > 1:
+                
+            
+        
+
 
         
+            
     
     
     

@@ -22,7 +22,7 @@ pio.renderers
 pio.renderers.default = "browser"
 
 import plotly.express as px
-
+import plotly
 
 
 class Plotter:
@@ -141,7 +141,7 @@ class Plotter:
 
 
 
-    def parallel_plot(self, input_df, target, message, labels_dict = None):
+    def parallel_coordinates(self, input_df, target, message, labels_dict = None):
         combined_local_df = input_df.join( target, how = 'outer')      
     
         if isinstance(target, pd.DataFrame):    
@@ -160,6 +160,19 @@ class Plotter:
 
 
 
+    def parallel_categories(self, parameters, scores, score_name_to_plot = 'mean_test_score', message = ''): 
+        parameters_local = parameters.copy()
+        scores_local = scores[score_name_to_plot].copy()        
+        temp_df = parameters_local.join(scores_local, how = 'outer')    
+        temp_df = temp_df.sort_values('mean_test_score', ascending = False)        
+        
+        fig = px.parallel_categories(temp_df, color = 'mean_test_score', color_continuous_scale=px.colors.sequential.Inferno)
+        filename = os.path.join(self.current_directory, message + '_parallel_categories_plot.html')   
+        plotly.offline.plot(fig, show_link = True, filename = filename)        
+    
+
+        
+
 if __name__ == '__main__':
     import sys
     sys.path.insert(0, '/home/pt/Documents/auto_eda')   
@@ -173,17 +186,17 @@ if __name__ == '__main__':
     
     plot_dir = '/media/pt/hdd/Auto EDA Results/unit_tests/plots'
     plotter = Plotter(plot_dir)    
-    plotter.parallel_plot(iris_df, target, message = 'iris')
+    plotter.parallel_coordinates(iris_df, target, message = 'iris')
 
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/regression/results/pickles')   
     target = database.load('y_train')  
     combined_continuous_df = database.load('combined_continuous_df')
 
     plotter = Plotter(plot_dir)    
-    plotter.parallel_plot(combined_continuous_df, target, message = 'House Price - continuous data')
+    plotter.parallel_coordinates(combined_continuous_df, target, message = 'House Price - continuous data')
 
 #    plotter = Plotter(plot_dir)    
-#    plotter.parallel_plot(parameters_to_plot,  results['mean_test_score'], message = 'House Price - continuous data')
+#    plotter.parallel_coordinates(parameters_to_plot,  results['mean_test_score'], message = 'House Price - continuous data')
 #
 #    
 
