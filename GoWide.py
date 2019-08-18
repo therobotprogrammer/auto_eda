@@ -95,7 +95,7 @@ def __convert_functions_to_class_names(processed_results_dict):
 
     total_rows = df_local.shape[0]
     total_cols = df_local.shape[1]
-    function_locations = pd.DataFrame(False, index=range(total_rows), columns=range(total_cols))
+    function_locations_mask = pd.DataFrame(False, index=range(total_rows), columns=df_local.columns)
 
 
     for column_idx, column in enumerate(df_local.columns):
@@ -104,13 +104,13 @@ def __convert_functions_to_class_names(processed_results_dict):
             if not (isinstance(cell_value, str) or isinstance(cell_value, numbers.Number) ):
                 try:
                     df_local.iloc[row_idx, column_idx] = type(cell_value).__name__
-                    function_locations.iloc[row_idx, column_idx] = True
+                    function_locations_mask.iloc[row_idx, column_idx] = True
                     
                 except:
                     df_local.iloc[row_idx, column_idx] = str(cell_value)
                     
     processed_results_dict['parameters_to_plot'] = df_local
-    processed_results_dict['function_locations'] = function_locations
+    processed_results_dict['functions_to_plot'] = df_local.where(function_locations_mask, np.nan)   
                 
     return processed_results_dict
 
@@ -131,9 +131,9 @@ def __remove_variance(processed_results_dict, compact_version = False):
         if group_count_in_column < 2:
             columns_with_no_varience.append(column)   
             
-    res_df = processed_results_dict['parameters_to_plot'].copy()
-    res_df = res_df.drop(columns_with_no_varience, axis = 1)     
-    processed_results_dict['parameters_to_plot'] = res_df
+    
+    processed_results_dict['parameters_to_plot'] = processed_results_dict['parameters_to_plot'].drop(columns_with_no_varience, axis = 1)     
+    processed_results_dict['functions_to_plot'] = processed_results_dict['functions_to_plot'].drop(columns_with_no_varience, axis = 1)     
     return processed_results_dict    
 
 
@@ -144,6 +144,35 @@ def process_results(cv_results, compact_version = False):
     
 
     return processed_results_dict
+
+
+
+import re, mpu
+def split_at_char_int_transistion(text_str):                       
+    if (text_str == np.nan) or (text_str == None) or (text_str == 'nan') or type(text_str) == type(np.nan) :
+       return np.nan
+   
+    elif not type(text_str) == type([]):
+        temp = []
+        temp.append(text_str)
+        text_str = temp
+        
+    elif type(text_str) == type([]):
+        text_str = mpu.datastructures.flatten(text_str)
+    
+    new_list = []
+
+    for element in text_str:
+        
+#        filtered_element = element.translate(str.maketrans(filters, ' ' * len(filters)))    
+#        split_list = re.split('(\d+)',element)
+        split_list = re.findall('(\d+|\D+)', element)
+        new_list.append(split_list)
+    
+    new_list = mpu.datastructures.flatten(new_list) 
+    
+    return new_list
+
 
     
 
@@ -167,7 +196,7 @@ class MultiTf(BaseEstimator, TransformerMixin):
         return result
         
 
-
+                
 
 if __name__ == '__main__':
     from mlflow import log_metric, log_param, log_artifacts
@@ -282,31 +311,64 @@ if __name__ == '__main__':
     plotter.parallel_categories(processed_results_dict['parameters_to_plot'] , processed_results_dict['scores'], score_name_to_plot = 'mean_test_score')
 
     
-    def sub_plots(parameters_to_plot, scores):
-        parameters_to_plot = processed_results_dict['parameters_to_plot']        
-        scores = processed_results_dict['scores'] 
-        function_locations = processed_results_dict['function_locations'] 
-        
-        for column in parameters_to_plot.columns:
-            group_obj =  parameters_to_plot.groupby(column, observed = True)            
+    lower_is_better = False
+    
+    
+    def sub_plots(functions_to_plot):
+        for column in functions_to_plot.columns:            
+            group_obj =  functions_to_plot.groupby(column)     
+            group_dict = group_obj.groups
             group_count_in_column = group_obj.count().shape[0]        
-            
-#            mask = parameters_to_plot.notnull()
-            #this should be always be > 1
-#            if group_count_in_column > 1:
+
+            if group_count_in_column > 0:
                 
-            
-        
+                print('plotting: ', column)
+                df_to_plot = pd.DataFrame()
+
+                for key, value in group_dict.items():
+                    selected_scores = processed_results_dict['scores'].loc[value, ['mean_test_score']]
+                    if lower_is_better:
+                        best_score_row = selected_scores.idxmin()
+                    else:
+                        best_score_row = selected_scores.idxmax()
+                                      
+                    extracted_df = processed_results_dict['scores'].loc[best_score_row].copy()
+                    
+                    extracted_df = extracted_df.T
+                    extracted_df.columns = [key]
+                    df_to_plot = df_to_plot.join(extracted_df, how = 'outer')
+                    
 
 
+
+                def get_split_scores_df(df):
+                    df_local = df.copy()
+                    
+                    index_to_drop = []
+                    
+                   
+                    
+                    for idx, value in enumerate(df.index):
+                        score_name = split_at_char_int_transistion(value)[0]
+                        
+                        if not score_name == 'split':
+                            index_to_drop.append(value)                        
+                    
+                    df_local = df_local.drop(index_to_drop)
+                    
+                    return df_local
+                
+                split_scores_df = get_split_scores_df(df_to_plot)
+                    
+                    
+                plotter.box_plot_df(split_scores_df)
+                        
+    sub_plots(processed_results_dict['functions_to_plot'])
         
             
     
     
-    
-    
-    
-    
+
     
     
     
@@ -490,10 +552,6 @@ if __name__ == '__main__':
 #
 #
 #
-
-
-
-
 
 
 

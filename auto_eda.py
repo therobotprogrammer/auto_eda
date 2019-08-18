@@ -355,9 +355,6 @@ def split_text(list_of_texts, split_at = ' '):
 
 
 def split_at_char_int_transistion(text_str):
-    if text_str == 'A5' or text_str == ['A5'] :
-        print('Found A5')
-        
     if (text_str == np.nan) or (text_str == None) or (text_str == 'nan') or type(text_str) == type(np.nan) :
        return np.nan
    

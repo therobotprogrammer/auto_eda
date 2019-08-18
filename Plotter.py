@@ -140,6 +140,10 @@ class Plotter:
         df_local.iplot(kind='box', boxpoints='outliers', title = message + ' - Box Plot')
 
 
+    def box_plot_plotly_express(self, df_local, message = ''):
+        filename = os.path.join(self.current_directory, message + '_box_plot.html')   
+        plotly.offline.plot(fig, show_link = True, filename = filename)
+        
 
     def parallel_coordinates(self, input_df, target, message, labels_dict = None):
         combined_local_df = input_df.join( target, how = 'outer')      
