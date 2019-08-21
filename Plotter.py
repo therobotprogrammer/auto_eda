@@ -23,6 +23,8 @@ pio.renderers.default = "browser"
 
 import plotly.express as px
 import plotly
+import plotly.graph_objects as go
+
 
 
 class Plotter:
@@ -34,6 +36,42 @@ class Plotter:
         self.top_save_directory = top_save_directory  
         self.current_directory  = top_save_directory
 #        self.set_current_dir('')
+        
+        self.color_list =             ['aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure,\
+            beige', 'bisque', 'black', 'blanchedalmond', 'blue,\
+            blueviolet', 'brown', 'burlywood', 'cadetblue,\
+            chartreuse', 'chocolate', 'coral', 'cornflowerblue,\
+            cornsilk', 'crimson', 'cyan', 'darkblue', 'darkcyan,\
+            darkgoldenrod', 'darkgray', 'darkgrey', 'darkgreen,\
+            darkkhaki', 'darkmagenta', 'darkolivegreen', 'darkorange,\
+            darkorchid', 'darkred', 'darksalmon', 'darkseagreen,\
+            darkslateblue', 'darkslategray', 'darkslategrey,\
+            darkturquoise', 'darkviolet', 'deeppink', 'deepskyblue,\
+            dimgray', 'dimgrey', 'dodgerblue', 'firebrick,\
+            floralwhite', 'forestgreen', 'fuchsia', 'gainsboro,\
+            ghostwhite', 'gold', 'goldenrod', 'gray', 'grey', 'green,\
+            greenyellow', 'honeydew', 'hotpink', 'indianred', 'indigo,\
+            ivory', 'khaki', 'lavender', 'lavenderblush', 'lawngreen,\
+            lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan,\
+            lightgoldenrodyellow', 'lightgray', 'lightgrey,\
+            lightgreen', 'lightpink', 'lightsalmon', 'lightseagreen,\
+            lightskyblue', 'lightslategray', 'lightslategrey,\
+            lightsteelblue', 'lightyellow', 'lime', 'limegreen,\
+            linen', 'magenta', 'maroon', 'mediumaquamarine,\
+            mediumblue', 'mediumorchid', 'mediumpurple,\
+            mediumseagreen', 'mediumslateblue', 'mediumspringgreen,\
+            mediumturquoise', 'mediumvioletred', 'midnightblue,\
+            mintcream', 'mistyrose', 'moccasin', 'navajowhite', 'navy,\
+            oldlace', 'olive', 'olivedrab', 'orange', 'orangered,\
+            orchid', 'palegoldenrod', 'palegreen', 'paleturquoise,\
+            palevioletred', 'papayawhip', 'peachpuff', 'peru', 'pink,\
+            plum', 'powderblue', 'purple', 'red', 'rosybrown,\
+            royalblue', 'rebeccapurple', 'saddlebrown', 'salmon,\
+            sandybrown', 'seagreen', 'seashell', 'sienna', 'silver,\
+            skyblue', 'slateblue', 'slategray', 'slategrey', 'snow,\
+            springgreen', 'steelblue', 'tan', 'teal', 'thistle', 'tomato',\
+            'turquoise', 'violet', 'wheat', 'white', 'whitesmoke',\
+            'yellow', 'yellowgreen']
         
         
     def set_current_dir(self, local_folder_name): 
@@ -141,10 +179,83 @@ class Plotter:
 
 
     def box_plot_plotly_express(self, df_local, message = ''):
+        fig = px.box(df_local)        
         filename = os.path.join(self.current_directory, message + '_box_plot.html')   
         plotly.offline.plot(fig, show_link = True, filename = filename)
         
+    def violin(self, df_local, message = ''):       
+        fig = go.Figure()
+        for column in df_local.columns:
+            temp = pd.DataFrame()
+            temp[column] = df_local[column]
+            temp['x'] = column
+            
+            fig.add_trace(go.Violin(x=temp['x'],
+                                    y=temp[column],
+                                    name=column,
+                                    box_visible=True,
+                                    meanline_visible=True))
+            
+        filename = os.path.join(self.current_directory, message + '_violin.html')   
+        plotly.offline.plot(fig, show_link = True, filename = filename)    
+        
 
+
+    def box_plot_with_mean(self, df_local = None, message = '', x_label = '', y_label = ''):       
+        fig = go.Figure(  )
+
+        for idx, column in enumerate(df_local.columns):
+            temp = pd.DataFrame()
+            temp[column] = df_local[column]
+            temp['x'] = column
+            
+            
+            fig.add_trace(go.Box(x=temp['x'],
+                                    y=temp[column],
+                                    name=column,
+                                    boxpoints = 'all',
+                                    boxmean = True,                           
+                                    ) )
+
+        fig.update_layout(
+                            title=go.layout.Title(
+                                text=message,
+                                xref="paper",
+#                                x=0,
+                                font=dict(
+                                        family="Courier New, monospace",
+                                        size=24,
+                                        color="#7f7f7f"
+                                    ),
+                                xanchor = 'auto'
+                                
+                            ),
+                            xaxis=go.layout.XAxis(
+                                title=go.layout.xaxis.Title(
+                                    text=x_label,
+                                    font=dict(
+                                        family="Courier New, monospace",
+                                        size=18,
+                                        color="#7f7f7f"
+                                    )
+                                )
+                            ),
+                            yaxis=go.layout.YAxis(
+                                title=go.layout.yaxis.Title(
+                                    text=y_label,
+                                    font=dict(
+                                        family="Courier New, monospace",
+                                        size=18,
+                                        color="#7f7f7f"
+                                    )
+                                )
+                            )
+                        )    
+                                    
+        filename = os.path.join(self.current_directory, message + '_box_with_mean.html')   
+        plotly.offline.plot(fig, show_link = True, filename = filename)   
+
+        
     def parallel_coordinates(self, input_df, target, message, labels_dict = None):
         combined_local_df = input_df.join( target, how = 'outer')      
     

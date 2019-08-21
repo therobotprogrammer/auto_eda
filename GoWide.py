@@ -147,6 +147,16 @@ def process_results(cv_results, compact_version = False):
 
 
 
+
+def get_equally_spaced_numbers_in_range(min_num = 1, max_num =100, total_numbers =10):
+    equally_spaced_numbers_list = np.linspace(min_num, max_num,total_numbers)
+    equally_spaced_numbers_list = equally_spaced_numbers_list.astype(int)
+    equally_spaced_numbers_list = np.unique(equally_spaced_numbers_list)
+    equally_spaced_numbers_list = equally_spaced_numbers_list.tolist()
+    return equally_spaced_numbers_list
+
+
+
 import re, mpu
 def split_at_char_int_transistion(text_str):                       
     if (text_str == np.nan) or (text_str == None) or (text_str == 'nan') or type(text_str) == type(np.nan) :
@@ -196,7 +206,35 @@ class MultiTf(BaseEstimator, TransformerMixin):
         return result
         
 
-                
+
+
+
+from sklearn.base import RegressorMixin
+
+class MultiRegressor(BaseEstimator, RegressorMixin):  
+    """An example of classifier"""
+
+    def __init__(self, estimator = None):
+        """
+        Called when initializing the classifier
+        """        
+        self.estimator = estimator
+
+
+    def fit(self, X, y=None):
+        self.estimator.fit(X, y)
+        return self
+
+
+    def predict(self, X):
+        return(self.estimator.predict(X))
+
+#    def score(self, X, y = None):
+#        # counts number of values bigger than mean
+#        return(self.estimator.score(X, y)) 
+
+
+
 
 if __name__ == '__main__':
     from mlflow import log_metric, log_param, log_artifacts
@@ -215,6 +253,7 @@ if __name__ == '__main__':
     from sklearn.tree import DecisionTreeRegressor
     from sklearn.ensemble import ExtraTreesRegressor
     from sklearn.neighbors import KNeighborsRegressor
+    from sklearn.linear_model import LinearRegression, Lasso
     import numpy as np
     np.random.seed(0)
 
@@ -233,22 +272,28 @@ if __name__ == '__main__':
     joint_df = database.load('joint_df')
     
     
-    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
+#    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
+    memory = '/media/pt/nvme/sklearn_memory/memory'
 
 
     ExtraTreesRegressor_params =    {
-                                        'max_depth': [1, 2, 3], 
-                                        'n_estimators': [1,10,100,1000],
+                                        'max_depth': [1,10] , 
+                                        'n_estimators': get_equally_spaced_numbers_in_range(1,2000,10),
                                     }
     
     
     KNeighborsRegressor_params =    {
-                                        'n_neighbors' : [2],
+                                        'n_neighbors' : [2,3,4],
+                                    }
+    
+    
+    bayesianRidge_params =          {
+                                        'n_iter' : [300,600,900]
                                     }
     
     
     estimator_list =                [   
-                                        BayesianRidge(),
+                                        {BayesianRidge() : bayesianRidge_params},
                                         DecisionTreeRegressor(),
                                         {KNeighborsRegressor() : KNeighborsRegressor_params},
                                         {ExtraTreesRegressor() : ExtraTreesRegressor_params}
@@ -281,21 +326,26 @@ if __name__ == '__main__':
                                     }
     
     
+    multi_regressor_params =        {   
+                                        'estimator' : [XGBRegressor(), LinearRegression()]
+                                    }
+    
     config_dict =                   {   
-                                        'multitf' : multitf_params
+                                        'multitf' : multitf_params,
+                                        'multiregressor' : multi_regressor_params                                        
                                     }    
     
     
     steps = [
-                ('multitf' , MultiTf() ), 
-                ('xgb' , XGBRegressor() ) 
+                ('multitf' , MultiTf() ),              
+                ('multiregressor' , MultiRegressor() ) 
             ]
     
     
     pipeline = Pipeline( memory = memory, steps = steps)
     grid_search_params = gererate_params(config_dict)
-    
-    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 10, scoring='neg_mean_squared_log_error', n_jobs=-1, verbose = 0)
+    scoring ='neg_mean_squared_log_error'
+    grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 10, scoring=scoring, n_jobs=-1, verbose = 0)
     t1 = time.time()
     grid_search_estimator.fit(joint_df, y_train)
     t2 = time.time()    
@@ -303,6 +353,15 @@ if __name__ == '__main__':
   
     cv_results = grid_search_estimator.cv_results_
 
+    
+    
+    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')   
+    cv_results_multiple_aug_21 = cv_results
+    database.save(cv_results_multiple_aug_21)
+    
+#    cv_results = database.load('cv_results_bak_20_min')
+
+    
     
     processed_results_dict= process_results(cv_results, compact_version = False)
 
@@ -314,7 +373,7 @@ if __name__ == '__main__':
     lower_is_better = False
     
     
-    def sub_plots(functions_to_plot):
+    def sub_plots(functions_to_plot,  message = '', x_label = '', y_label = ''):
         for column in functions_to_plot.columns:            
             group_obj =  functions_to_plot.groupby(column)     
             group_dict = group_obj.groups
@@ -338,16 +397,10 @@ if __name__ == '__main__':
                     extracted_df.columns = [key]
                     df_to_plot = df_to_plot.join(extracted_df, how = 'outer')
                     
-
-
-
                 def get_split_scores_df(df):
-                    df_local = df.copy()
-                    
+                    df_local = df.copy()                    
                     index_to_drop = []
-                    
-                   
-                    
+
                     for idx, value in enumerate(df.index):
                         score_name = split_at_char_int_transistion(value)[0]
                         
@@ -361,15 +414,15 @@ if __name__ == '__main__':
                 split_scores_df = get_split_scores_df(df_to_plot)
                     
                     
-                plotter.box_plot_df(split_scores_df)
+#                plotter.box_plot_df(split_scores_df)
+                plotter.box_plot_with_mean(split_scores_df, message = message + column , x_label = x_label, y_label = y_label)
                         
-    sub_plots(processed_results_dict['functions_to_plot'])
+    sub_plots(processed_results_dict['functions_to_plot'], message = 'Transformers - CV Splits Box Plot - ', x_label = 'Transformer', y_label = scoring)
         
             
     
     
 
-    
     
     
 
