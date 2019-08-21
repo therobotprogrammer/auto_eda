@@ -255,6 +255,9 @@ if __name__ == '__main__':
     from sklearn.neighbors import KNeighborsRegressor
     from sklearn.linear_model import LinearRegression, Lasso
     import numpy as np
+    from sklearn.feature_selection import SelectFromModel
+    from sklearn.svm import LinearSVR
+
     np.random.seed(0)
 
     #reimport because if an issue where pickle cannot find a class not part of __main__
@@ -277,18 +280,24 @@ if __name__ == '__main__':
 
 
     ExtraTreesRegressor_params =    {
-                                        'max_depth': [1,10] , 
-                                        'n_estimators': get_equally_spaced_numbers_in_range(1,2000,10),
+#                                        'max_depth': [1,10] , 
+#                                        'n_estimators': get_equally_spaced_numbers_in_range(1,2000,10),
+                                        'max_depth': [1] , 
+                                        'n_estimators': [1],                                        
                                     }
     
     
     KNeighborsRegressor_params =    {
-                                        'n_neighbors' : [2,3,4],
+#                                        'n_neighbors' : [2,3,4],
+                                        'n_neighbors' : [2],
+
                                     }
     
     
     bayesianRidge_params =          {
-                                        'n_iter' : [300,600,900]
+#                                        'n_iter' : [300,600,900]
+                                        'n_iter' : [300]
+
                                     }
     
     
@@ -327,17 +336,42 @@ if __name__ == '__main__':
     
     
     multi_regressor_params =        {   
-                                        'estimator' : [XGBRegressor(), LinearRegression()]
+                                        'estimator' : [XGBRegressor(), LinearRegression(), Lasso()]
                                     }
+    
+    
+    
+    
+
+    
+    selectfrommodel_params =        {    
+                                        'estimator' : [LinearSVR() ]  ,
+#                                        'penalty': ['l1']
+                                    }    
+        
+    
+    selectfrommodel_dict =          {
+                                        SelectFromModel(LinearSVR()) :  selectfrommodel_params                            
+                                    }        
+    
+    feature_selection_params =      {
+                                        'transformer' :    selectfrommodel_dict                                     
+                                    }
+    
+    
+    
+    
     
     config_dict =                   {   
                                         'multitf' : multitf_params,
+#                                        'selectfrommodel' : selectfrommodel_dict, 
                                         'multiregressor' : multi_regressor_params                                        
                                     }    
-    
-    
+
+
     steps = [
-                ('multitf' , MultiTf() ),              
+                ('multitf' , MultiTf() ),  
+                ('selectfrommodel', SelectFromModel(LinearSVR()) ) ,                 
                 ('multiregressor' , MultiRegressor() ) 
             ]
     
