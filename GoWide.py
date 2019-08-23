@@ -16,7 +16,9 @@ import numpy as np
 from Plotter import Plotter
 import numbers
     
+import collections
 
+#config_dict = collections.OrderedDict()
 
 
 def gererate_params(config_dict):
@@ -137,10 +139,61 @@ def __remove_variance(processed_results_dict, compact_version = False):
     return processed_results_dict    
 
 
-def process_results(cv_results, compact_version = False):
+
+def __order_wrt_pipeline(processed_results_dict, pipeline):
+    #extract columns that have a function. As only these column names are found in pipeline 
+    #and need to be arranged
+    all_column_names = pd.Series(processed_results_dict['functions_to_plot'].columns)
+
+    temp_df = processed_results_dict['functions_to_plot'].copy()
+    temp_df = temp_df.dropna(axis = 1)    
+    function_columns = temp_df.columns.tolist()  
+
+    functions_in_pipeline_ordered = pd.DataFrame(pipeline.steps)
+    functions_in_pipeline_ordered = functions_in_pipeline_ordered[0].tolist()
+    
+    
+    
+    new_order_of_function_columns = []
+       
+    def get_indexes_with_top_function_name(all_column_names, top_function_name):
+        df = all_column_names.str.split('__', expand = True)
+        indexes = df.index[df[0] == top_function_name].tolist()  
+        selected_column_names = all_column_names.iloc[indexes]
+        return list(selected_column_names)
+    
+    for column in functions_in_pipeline_ordered:
+#        top_function_name = column.split('__')[0]  
+        selected_column_names = get_indexes_with_top_function_name(all_column_names, column)
+
+#        location_of_top_function_name_in_pipeline = functions_in_pipeline_ordered.index(top_function_name)
+        new_order_of_function_columns.append(selected_column_names)
+        
+    new_order_of_function_columns = list(itertools.chain.from_iterable(new_order_of_function_columns))
+    print()
+        
+#    new_order_of_function_columns = list(filter(None, new_order_of_function_columns)) 
+        
+    assert (len (new_order_of_function_columns) == len(all_column_names))
+    
+    names_of_df_to_reindex = ['functions_to_plot', 'parameters_to_plot']
+    
+    for df_name in names_of_df_to_reindex:
+        df = processed_results_dict[df_name]        
+        df = df.reindex(columns=new_order_of_function_columns)
+        processed_results_dict[df_name] = df
+
+    return processed_results_dict
+
+def process_results(cv_results, pipeline, compact_version = False):
+    
     processed_results_dict = __get_params_and_scores(cv_results)
     processed_results_dict =  __convert_functions_to_class_names(processed_results_dict)
+    
+    #remove features for which multiple variations were not needed
     processed_results_dict = __remove_variance(processed_results_dict, compact_version)
+    
+    processed_results_dict = __order_wrt_pipeline(processed_results_dict, pipeline)
     
 
     return processed_results_dict
@@ -197,8 +250,9 @@ class MultiTf(BaseEstimator, TransformerMixin):
             transformer=eval(transformer)()
         self.transformer = transformer
             
-    def fit(self, X, y=None):
-        self.transformer.fit(X)
+    def fit(self, X, y=None, **fit_params):
+        if y is not None:
+            self.transformer.fit(X)            
         return self
     
     def transform(self, x, y=None):        
@@ -257,6 +311,11 @@ if __name__ == '__main__':
     import numpy as np
     from sklearn.feature_selection import SelectFromModel
     from sklearn.svm import LinearSVR
+    from sklearn.feature_selection import SelectKBest
+    from sklearn.feature_selection import chi2
+    from sklearn.feature_selection import f_regression
+    from sklearn.feature_selection import RFE
+    from sklearn.svm import SVR
 
     np.random.seed(0)
 
@@ -295,8 +354,8 @@ if __name__ == '__main__':
     
     
     bayesianRidge_params =          {
-#                                        'n_iter' : [300,600,900]
-                                        'n_iter' : [300]
+                                        'n_iter' : [300,600,900]
+#                                        'n_iter' : [300]
 
                                     }
     
@@ -336,48 +395,50 @@ if __name__ == '__main__':
     
     
     multi_regressor_params =        {   
-                                        'estimator' : [XGBRegressor(), LinearRegression(), Lasso()]
+                                        'estimator' : [XGBRegressor(), LinearRegression()]
                                     }
     
     
     
+    SelectFromModel_params =        {
+                                        'estimator' : [LinearSVR()]
+                                    }
     
-
-    
-    selectfrommodel_params =        {    
-                                        'estimator' : [LinearSVR() ]  ,
-#                                        'penalty': ['l1']
-                                    }    
         
-    
     selectfrommodel_dict =          {
-                                        SelectFromModel(LinearSVR()) :  selectfrommodel_params                            
+#                                        SelectFromModel(LinearSVR()) : SelectFromModel_params
+                                        SelectFromModel(LinearSVR()) 
+
+                                    }
+    
+    multi_selector_params =        {    
+#                                        'transformer' : [selectfrommodel_dict]  ,
+#                                         'transformer' : [SelectFromModel(LinearSVR()) ]
                                     }        
     
-    feature_selection_params =      {
-                                        'transformer' :    selectfrommodel_dict                                     
-                                    }
-    
-    
-    
-    
+
     
     config_dict =                   {   
                                         'multitf' : multitf_params,
-#                                        'selectfrommodel' : selectfrommodel_dict, 
+#                                        'multiselector' : multi_selector_params, 
                                         'multiregressor' : multi_regressor_params                                        
                                     }    
-
+    
+    clf = LinearRegression()
+#    clf2 = SVR(kernel="linear")
+#    selector = RFE(estimator, 5, step=1)
 
     steps = [
                 ('multitf' , MultiTf() ),  
-                ('selectfrommodel', SelectFromModel(LinearSVR()) ) ,                 
+                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
                 ('multiregressor' , MultiRegressor() ) 
             ]
     
     
     pipeline = Pipeline( memory = memory, steps = steps)
     grid_search_params = gererate_params(config_dict)
+    
+    
     scoring ='neg_mean_squared_log_error'
     grid_search_estimator = GridSearchCV(pipeline, grid_search_params, cv = 10, scoring=scoring, n_jobs=-1, verbose = 0)
     t1 = time.time()
@@ -397,7 +458,7 @@ if __name__ == '__main__':
 
     
     
-    processed_results_dict= process_results(cv_results, compact_version = False)
+    processed_results_dict= process_results(cv_results, pipeline, compact_version = False)
 
     plot_dir = '/media/pt/hdd/Auto EDA Results/unit_tests/plots'
     plotter = Plotter(plot_dir)        

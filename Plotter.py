@@ -255,7 +255,7 @@ class Plotter:
         filename = os.path.join(self.current_directory, message + '_box_with_mean.html')   
         plotly.offline.plot(fig, show_link = True, filename = filename)   
 
-        
+    
     def parallel_coordinates(self, input_df, target, message, labels_dict = None):
         combined_local_df = input_df.join( target, how = 'outer')      
     
@@ -274,6 +274,29 @@ class Plotter:
         plotly.offline.plot(fig, show_link = True, filename = filename)
 
 
+
+    def parallel_coordinates_wrapper(self, parameters, scores, score_name_to_plot, message = '', labels_dict = None):        
+        parameters_local = parameters.copy()
+        scores_local = scores[score_name_to_plot].copy()        
+        temp_df = parameters_local.join(scores_local, how = 'outer')    
+        temp_df = temp_df.sort_values('mean_test_score', ascending = False)  
+        combined_local_df = temp_df      
+    
+#        if isinstance(target, pd.DataFrame):    
+#            target_name = target.columns[0]
+#            
+#        else:
+#            #target is a series
+#            target_name = target.name
+
+        fig = px.parallel_coordinates(combined_local_df, color=score_name_to_plot, labels=labels_dict,
+                                     color_continuous_scale=px.colors.diverging.Tealrose,
+                                     color_continuous_midpoint=2 )
+
+        filename = os.path.join(self.current_directory, message + '_parallel_plot.html')   
+        plotly.offline.plot(fig, show_link = True, filename = filename)
+        
+        
 
     def parallel_categories(self, parameters, scores, score_name_to_plot = 'mean_test_score', message = ''): 
         parameters_local = parameters.copy()
