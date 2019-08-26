@@ -17,6 +17,8 @@ from Plotter import Plotter
 import numbers
     
 import collections
+from pandas.api.types import is_numeric_dtype
+
 
 #config_dict = collections.OrderedDict()
 
@@ -112,8 +114,7 @@ def __convert_functions_to_class_names(processed_results_dict):
                     df_local.iloc[row_idx, column_idx] = str(cell_value)
                     
     processed_results_dict['parameters_to_plot'] = df_local
-    processed_results_dict['functions_to_plot'] = df_local.where(function_locations_mask, np.nan)   
-                
+    processed_results_dict['functions_to_plot'] = df_local.where(function_locations_mask, np.nan)                   
     return processed_results_dict
 
 
@@ -139,6 +140,11 @@ def __remove_variance(processed_results_dict, compact_version = False):
     return processed_results_dict    
 
 
+def __get_indexes_with_top_function_name(all_column_names, top_function_name):
+    df = all_column_names.str.split('__', expand = True)
+    indexes = df.index[df[0] == top_function_name].tolist()  
+    selected_column_names = all_column_names.iloc[indexes]
+    return list(selected_column_names)
 
 def __order_wrt_pipeline(processed_results_dict, pipeline):
     #extract columns that have a function. As only these column names are found in pipeline 
@@ -147,37 +153,20 @@ def __order_wrt_pipeline(processed_results_dict, pipeline):
 
     temp_df = processed_results_dict['functions_to_plot'].copy()
     temp_df = temp_df.dropna(axis = 1)    
-    function_columns = temp_df.columns.tolist()  
 
     functions_in_pipeline_ordered = pd.DataFrame(pipeline.steps)
     functions_in_pipeline_ordered = functions_in_pipeline_ordered[0].tolist()
-    
-    
-    
-    new_order_of_function_columns = []
-       
-    def get_indexes_with_top_function_name(all_column_names, top_function_name):
-        df = all_column_names.str.split('__', expand = True)
-        indexes = df.index[df[0] == top_function_name].tolist()  
-        selected_column_names = all_column_names.iloc[indexes]
-        return list(selected_column_names)
-    
-    for column in functions_in_pipeline_ordered:
-#        top_function_name = column.split('__')[0]  
-        selected_column_names = get_indexes_with_top_function_name(all_column_names, column)
 
-#        location_of_top_function_name_in_pipeline = functions_in_pipeline_ordered.index(top_function_name)
+    new_order_of_function_columns = []    
+
+    for column in functions_in_pipeline_ordered:
+        selected_column_names = __get_indexes_with_top_function_name(all_column_names, column)
         new_order_of_function_columns.append(selected_column_names)
         
     new_order_of_function_columns = list(itertools.chain.from_iterable(new_order_of_function_columns))
-    print()
-        
-#    new_order_of_function_columns = list(filter(None, new_order_of_function_columns)) 
-        
     assert (len (new_order_of_function_columns) == len(all_column_names))
     
-    names_of_df_to_reindex = ['functions_to_plot', 'parameters_to_plot']
-    
+    names_of_df_to_reindex = ['functions_to_plot', 'parameters_to_plot']    
     for df_name in names_of_df_to_reindex:
         df = processed_results_dict[df_name]        
         df = df.reindex(columns=new_order_of_function_columns)
@@ -210,6 +199,8 @@ def get_equally_spaced_numbers_in_range(min_num = 1, max_num =100, total_numbers
 
 
 
+
+
 import re, mpu
 def split_at_char_int_transistion(text_str):                       
     if (text_str == np.nan) or (text_str == None) or (text_str == 'nan') or type(text_str) == type(np.nan) :
@@ -236,6 +227,24 @@ def split_at_char_int_transistion(text_str):
     
     return new_list
 
+
+
+def __get_split_scores_df(df):
+    df_local = df.copy()                    
+    index_to_drop = []
+
+    for idx, value in enumerate(df.index):
+        score_name = split_at_char_int_transistion(value)[0]
+        
+        if not score_name == 'split':
+            index_to_drop.append(value)                        
+    
+    df_local = df_local.drop(index_to_drop)
+    
+    return df_local
+                
+                
+                
 
     
 
@@ -317,12 +326,31 @@ if __name__ == '__main__':
     from sklearn.feature_selection import RFE
     from sklearn.svm import SVR
 
-    np.random.seed(0)
+    global_random_seed = 0
+    np.random.seed(global_random_seed)
 
     #reimport because if an issue where pickle cannot find a class not part of __main__
     from GoWide import MultiTf
     import time
 
+
+
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import os
+    import cufflinks as cf
+    cf.go_offline()
+    
+    
+    import plotly.io as pio
+    pio.renderers
+    pio.renderers.default = "browser"
+    
+    import plotly.express as px
+    import plotly
+    import plotly.graph_objects as go
+    
 
 
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/regression/results/pickles')   
@@ -349,14 +377,12 @@ if __name__ == '__main__':
     KNeighborsRegressor_params =    {
 #                                        'n_neighbors' : [2,3,4],
                                         'n_neighbors' : [2],
-
                                     }
     
     
     bayesianRidge_params =          {
                                         'n_iter' : [300,600,900]
 #                                        'n_iter' : [300]
-
                                     }
     
     
@@ -430,7 +456,7 @@ if __name__ == '__main__':
 
     steps = [
                 ('multitf' , MultiTf() ),  
-                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
+#                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
                 ('multiregressor' , MultiRegressor() ) 
             ]
     
@@ -454,7 +480,7 @@ if __name__ == '__main__':
     cv_results_multiple_aug_21 = cv_results
     database.save(cv_results_multiple_aug_21)
     
-#    cv_results = database.load('cv_results_bak_20_min')
+    cv_results = database.load('cv_results_multiple_aug_21')
 
     
     
@@ -468,14 +494,13 @@ if __name__ == '__main__':
     lower_is_better = False
     
     
-    def sub_plots(functions_to_plot,  message = '', x_label = '', y_label = ''):
+    def make_box_plots(functions_to_plot,  message = '', x_label = '', y_label = '', lower_is_better = False):
         for column in functions_to_plot.columns:            
             group_obj =  functions_to_plot.groupby(column)     
             group_dict = group_obj.groups
             group_count_in_column = group_obj.count().shape[0]        
 
-            if group_count_in_column > 0:
-                
+            if group_count_in_column > 0:                
                 print('plotting: ', column)
                 df_to_plot = pd.DataFrame()
 
@@ -491,35 +516,192 @@ if __name__ == '__main__':
                     extracted_df = extracted_df.T
                     extracted_df.columns = [key]
                     df_to_plot = df_to_plot.join(extracted_df, how = 'outer')
-                    
-                def get_split_scores_df(df):
-                    df_local = df.copy()                    
-                    index_to_drop = []
 
-                    for idx, value in enumerate(df.index):
-                        score_name = split_at_char_int_transistion(value)[0]
-                        
-                        if not score_name == 'split':
-                            index_to_drop.append(value)                        
+                split_scores_df = __get_split_scores_df(df_to_plot)
+                x_label = column.split('__')[-1]
+                plotter.box_plot_with_mean(split_scores_df, message = column , x_label = x_label, y_label = scoring)
+    
+    from ParallelCPU import ParallelCPU
+    parallel = ParallelCPU(debug_mode = False)
                     
-                    df_local = df_local.drop(index_to_drop)
-                    
-                    return df_local
-                
-                split_scores_df = get_split_scores_df(df_to_plot)
-                    
-                    
-#                plotter.box_plot_df(split_scores_df)
-                plotter.box_plot_with_mean(split_scores_df, message = message + column , x_label = x_label, y_label = y_label)
-                        
-    sub_plots(processed_results_dict['functions_to_plot'], message = 'Transformers - CV Splits Box Plot - ', x_label = 'Transformer', y_label = scoring)
+    parallel.compute(processed_results_dict['functions_to_plot'], function = make_box_plots)
         
+    
+    
+    def get_experiment_wise_data(processed_results_dict):
+        functions_to_plot = processed_results_dict['functions_to_plot'] 
+        parameters_to_plot = processed_results_dict['parameters_to_plot']
+
+        functions_to_plot_mask = functions_to_plot.isnull()
+        parameters_to_plot_mask = parameters_to_plot.notnull()      
+        parameters_only_mask = functions_to_plot_mask & parameters_to_plot_mask
+        
+        unique_parameter_combinations = parameters_only_mask.drop_duplicates()        
+        
+        def finder(df, row):
+            for col in df:
+                df = df.loc[(df[col] == row[col]) | (df[col].isnull() & pd.isnull(row[col]))]
+            return df.index
+        
+        all_df_to_plot = []
+        
+        for index, row in unique_parameter_combinations.iterrows():
+            matching_indexes = finder(parameters_only_mask, row)
             
-    
-    
+            df_to_plot = parameters_to_plot.loc[matching_indexes]
+            df_to_plot = df_to_plot.dropna(axis = 1)
+            
+            matching_columns = df_to_plot.columns
+            
+            dict_for_experiment = {}
+            
+            dict_for_experiment['matching_rows'] = matching_indexes
+            dict_for_experiment['matching_columns'] = matching_columns
+
+            all_df_to_plot.append(dict_for_experiment)
+
+        return pd.DataFrame(all_df_to_plot).T
+
+    experiment_wise_data_df = get_experiment_wise_data(processed_results_dict)
+
+
+    import plotly.graph_objects as go
+
+    def __plot_experiment(df):
+        title = ''
+
+        columns_with_no_varience = []    
+        columns_with_numeric_values = []
+        
+        columns_with_no_numeric_values = []
+        
+        for column in df.columns:
+            group_obj =  df.groupby(column, observed = True)            
+            group_count_in_column = group_obj.count().shape[0]
+            group_dict = group_obj.groups
 
     
+            if group_count_in_column < 2:
+                columns_with_no_varience.append(column)   
+                title_to_append = list(group_dict)
+                title_to_append = title_to_append[0]
+                
+                if title == '':
+                    title = column + ' - ' + title_to_append
+                    
+                else:    
+                    title = title + ' - ' + str(title_to_append)
+        
+            elif is_numeric_dtype(df[column]):
+                columns_with_numeric_values.append(column)
+                
+            else:
+                columns_with_no_numeric_values.append(column)                
+                
+        print()
+        df = df.drop(columns = columns_with_no_varience)
     
+        metric_to_plot = 'mean_test_score'
+        score_df = processed_results_dict['scores']
+        score_df = score_df.loc[df.index]
+        score_column = score_df[metric_to_plot]
+        
+        
+        
+        if len(columns_with_numeric_values) == 0:
+            return False
+        
+#        plotter.parallel_categories(df, processed_results_dict['scores'] , metric_to_plot, message = title)
+
+
+        df[metric_to_plot] = score_column
+
+        
+        
+
+
+        
+        if len(columns_with_numeric_values) == 2:
+            x = df[columns_with_numeric_values[0]]
+            y = df[columns_with_numeric_values[1]]
+            z = df[metric_to_plot]
+            
+            color = df[columns_with_no_numeric_values[0]]
+                
+            trace_train = go.Mesh3d(x=x,y=y,z=z,
+                       alphahull=3,
+                       opacity=.5,
+                       colorscale="Reds",
+                       intensity=z,   
+                       facecolor = z                       
+                       )
+            
+    #        trace_test = go.Mesh3d(x=x,y=y,z=z,
+    #                   alphahull=3,
+    #                   opacity=.5,
+    #                   colorscale="Greens",
+    #                   intensity=color,                        
+    #                   )
+            
+            traces = [trace_train]
+                
+            plotly.offline.plot(traces)            
+            
+        else:
+            for column_name in columns_with_numeric_values:                
+                fig = px.line(df, x=column_name, y=metric_to_plot, color=columns_with_no_numeric_values[0], title = title)
+                fig.show()
+
+        return True
+        
+#
+#
+#            x = df[columns_with_numeric_values[0]]
+#            y = df[columns_with_numeric_values[0]]
+#            z = score_column
+#            
+#            color = df[columns_with_no_numeric_values[0]]
+#                
+#            trace_train = go.Mesh3d(x=x,y=y,z=z,
+#                       alphahull=3,
+#                       opacity=.5,
+#                       colorscale="Reds",
+#                       intensity=color,   
+#                       
+#                       )
+#            
+#    #        trace_test = go.Mesh3d(x=x,y=y,z=z,
+#    #                   alphahull=3,
+#    #                   opacity=.5,
+#    #                   colorscale="Greens",
+#    #                   intensity=color,                        
+#    #                   )
+#            
+#            traces = [trace_train]
+#                
+#            plotly.offline.plot(traces)
+
+            
+
+#    
+#        fig = px.line(df, x = coluns_with_numeric_values, y=metric_to_plot, color='country')
+#        fig.show()
+    
+            
+        
+    def plot_all_experiments(experiment_wise_data_df):
+        parameters_to_plot = processed_results_dict['parameters_to_plot']
+        
+        for column in experiment_wise_data_df:
+            row_indexes = experiment_wise_data_df[column]['matching_rows']
+            column_indexes = experiment_wise_data_df[column]['matching_columns']
+            extracted_experiment_df = parameters_to_plot.loc[row_indexes, column_indexes]
+            
+            __plot_experiment(extracted_experiment_df)
+#            parallel.compute(extracted_experiment_df, __plot_experiment)
+
+    
+    plot_all_experiments(experiment_wise_data_df)
 
 #        
 #    

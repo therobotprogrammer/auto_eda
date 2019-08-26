@@ -135,7 +135,7 @@ class ParallelCPU:
         if n_cores == -1 or n_cores == 0:
             self.n_cores = multiprocessing.cpu_count() 
         self.verify_parallel_execution = verify_parallel_execution
-        self.debug_mode = False
+        self.debug_mode = debug_mode
   
         
     def compute(self, df_input, function):
@@ -225,8 +225,11 @@ class ParallelCPU:
                         #concatenate based on datatype
                         if isinstance(splits_to_concatenate[0], pd.DataFrame):
                             joined_data_df = join_dataframes(splits_to_concatenate)
-                            compiled_result_parallel.append(joined_data_df)       
-    
+                            compiled_result_parallel.append(joined_data_df)    
+                            
+                        elif isinstance(splits_to_concatenate[0], type(None)):
+                            compiled_result_parallel.append(None)
+                            
                         else:
                             joined_data = join(splits_to_concatenate)
                             compiled_result_parallel.append(joined_data)

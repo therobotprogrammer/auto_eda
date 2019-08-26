@@ -309,7 +309,12 @@ class Plotter:
         plotly.offline.plot(fig, show_link = True, filename = filename)        
     
 
+    def line_plot(self, df, x_columns , y_columns, color_columns, message = ''):
+        fig = px.line(df, x_columns, y_columns, color_columns)
         
+        filename = os.path.join(self.current_directory, message + '_parallel_categories_plot.html')   
+        plotly.offline.plot(fig, show_link = True, filename = filename)    
+
 
 if __name__ == '__main__':
     import sys
