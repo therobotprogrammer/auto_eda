@@ -14,6 +14,8 @@ import numbers
 from pandas.api.types import is_numeric_dtype
 import re, mpu
 import plotly.graph_objects as go
+from SaveAndLoad import SaveAndLoad
+import colorlover as cl
 
 
 from ParallelCPU import ParallelCPU
@@ -23,12 +25,18 @@ from ParallelCPU import ParallelCPU
 
 
 class Analyzer:
-    def __init__(self, plot_dir = '', show_plots = True):        
+    def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False):        
         self.config = None
         self.pipeline = None
         self.lower_is_better = False  
         self.scoring = None
         self.show_plots = show_plots
+        self.message = message
+        
+        database_top_directory = database.save_directory
+        database_sub_directory = os.path.join(database_top_directory, 'Analyzer', message)
+        
+        self.database = SaveAndLoad(database_sub_directory)
 
         if plot_dir == '':            
             plot_dir = os.getcwd()
@@ -36,7 +44,7 @@ class Analyzer:
         self.plotter = Plotter(self.plot_dir)        
 
 
-        self.parallel = ParallelCPU(debug_mode = False)
+        self.parallel = ParallelCPU(debug_mode = debug_mode)
         
         self.processing_time_ = 0        
         self.grid_search_arguments = None
@@ -45,19 +53,49 @@ class Analyzer:
         self.processed_results_dict = None
 
 
-    def gererate_params(self, config_dict):
+    def gererate_params(self, config_dict):        
         generated_params = self.__dp(config_dict)
         return generated_params
     
-    
+
     
     def gridsearchcv(self, pipeline, config, **kwargs ):
-        self.grid_search_arguments = kwargs
-        
+        self.grid_search_arguments = kwargs        
         self.pipeline = pipeline
-        self.grid_search_params = self.gererate_params(config)        
+        self.grid_search_params = self.gererate_params(config) 
+
         self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **kwargs)        
 
+
+    def load_precomputed_results(self, df):
+        train_database_archive_list = self.database.load('train_database_archive')
+        
+        df_found_in_archive = False
+        archived_df = None
+        archived_params = None
+        
+        if train_database_archive_list is not None: 
+            for entry in train_database_archive_list:
+                curr_df = entry[0]
+                
+                if curr_df.equals(df):
+                    archived_df = entry[0]
+                    archived_params = entry[1]
+                    df_found_in_archive = true
+                    break
+                
+        if df_found_in_archive:
+            parameters_to_bypass_computation = []
+            
+            for param in self.grid_search_params:
+                if param in archived_params:
+                    parameters_to_bypass_computation.append[param]
+            
+            
+            ################# continue from here######################
+#            self.grid_search_params = self.grid_search_params.
+        
+        
 
     def fit(self, X, y):
         t1 = time.time()
@@ -69,18 +107,20 @@ class Analyzer:
         self.processed_results_dict = self.process_results(self.cv_results, self.pipeline, compact_version = False)
 
         if self.show_plots:
+            self.make_plots()
 
+    def make_plots(self):
             self.scoring = self.grid_search_estimator.scoring
             
             #make parallel categories plot
-            self.plotter.parallel_categories(self.processed_results_dict['parameters_to_plot'] , self.processed_results_dict['scores'], score_name_to_plot = 'mean_test_score')                                
+            self.plotter.parallel_categories(self.processed_results_dict['parameters_to_plot'] , self.processed_results_dict['scores'], score_name_to_plot = 'mean_test_score', message = self.message)                                
             
             #make box plots for all multiwrappers
             self.parallel.compute(self.processed_results_dict['functions_to_plot'], function = self.make_box_plots)  
             
             #plot all experiment parameters
             experiment_wise_data_df = self.get_experiment_wise_data(self.processed_results_dict)
-            self.plot_all_experiments(experiment_wise_data_df)
+            self.parallel.compute(experiment_wise_data_df, self.plot_all_experiments)
     
     
 
@@ -142,21 +182,14 @@ class Analyzer:
     
         processed_results_dict = {}
         processed_results_dict['parameters_to_plot'] = parameters_to_plot
-        processed_results_dict['scores'] = scores
-        
+        processed_results_dict['scores'] = scores        
         return processed_results_dict
     
     
     def __convert_functions_to_class_names(self, processed_results_dict):
         df_local = processed_results_dict['parameters_to_plot'].copy()
-    #    locations_of_functions_mask = pd.DataFrame(np.zeros((df_local.shape[0], df_local.shape[0])))
-    
-    #    locations_of_functions_mask = pd.DataFrame(0, index=range(df_local.shape[0]), columns=range(df_local.shape[1])))
-    
         total_rows = df_local.shape[0]
-        total_cols = df_local.shape[1]
         function_locations_mask = pd.DataFrame(False, index=range(total_rows), columns=df_local.columns)
-    
     
         for column_idx, column in enumerate(df_local.columns):
             for row_idx, value in enumerate(df_local[column]) :
@@ -175,10 +208,9 @@ class Analyzer:
     
     def __remove_variance(self, processed_results_dict, compact_version = False):
         temp_df = processed_results_dict['parameters_to_plot'].copy()        
-    #    temp_df = temp_df.dropna(axis = 1, how = 'all')      
         if not compact_version:
             temp_df = temp_df.fillna('##MISSING##')
-              
+                                     
         columns_with_no_varience = []        
         
         for column in temp_df.columns:
@@ -188,7 +220,6 @@ class Analyzer:
             if group_count_in_column < 2:
                 columns_with_no_varience.append(column)   
                 
-        
         processed_results_dict['parameters_to_plot'] = processed_results_dict['parameters_to_plot'].drop(columns_with_no_varience, axis = 1)     
         processed_results_dict['functions_to_plot'] = processed_results_dict['functions_to_plot'].drop(columns_with_no_varience, axis = 1)     
         return processed_results_dict    
@@ -273,15 +304,13 @@ class Analyzer:
         index_to_drop = []
     
         for idx, value in enumerate(df.index):
-            score_name = self.split_at_char_int_transistion(value)[0]
-            
+            score_name = self.split_at_char_int_transistion(value)[0]            
             if not score_name == 'split':
                 index_to_drop.append(value)                        
         
         df_local = df_local.drop(index_to_drop)
         
         return df_local
-                    
                     
                     
     def make_box_plots(self, functions_to_plot,  message = '', x_label = '', y_label = ''):
@@ -309,7 +338,7 @@ class Analyzer:
                 split_scores_df = self.__get_split_scores_df(df_to_plot)
                 x_label = column.split('__')[-1]
                 self.plotter.box_plot_with_mean(split_scores_df, message = column , x_label = x_label, y_label = self.scoring)
-    
+
 
 
     def finder(self, df, row):
@@ -323,27 +352,20 @@ class Analyzer:
 
         functions_to_plot_mask = functions_to_plot.isnull()
         parameters_to_plot_mask = parameters_to_plot.notnull()      
-        parameters_only_mask = functions_to_plot_mask & parameters_to_plot_mask
-        
+        parameters_only_mask = functions_to_plot_mask & parameters_to_plot_mask        
         unique_parameter_combinations = parameters_only_mask.drop_duplicates()        
 
         all_df_to_plot = []
         
         for index, row in unique_parameter_combinations.iterrows():
-            matching_indexes = self.finder(parameters_only_mask, row)
-            
+            matching_indexes = self.finder(parameters_only_mask, row)            
             df_to_plot = parameters_to_plot.loc[matching_indexes]
-            df_to_plot = df_to_plot.dropna(axis = 1)
-            
-            matching_columns = df_to_plot.columns
-            
-            dict_for_experiment = {}
-            
+            df_to_plot = df_to_plot.dropna(axis = 1)            
+            matching_columns = df_to_plot.columns            
+            dict_for_experiment = {}            
             dict_for_experiment['matching_rows'] = matching_indexes
             dict_for_experiment['matching_columns'] = matching_columns
-
             all_df_to_plot.append(dict_for_experiment)
-
         return pd.DataFrame(all_df_to_plot).T
     
     
@@ -365,8 +387,7 @@ class Analyzer:
                 title_to_append = title_to_append[0]
                 
                 if title == '':
-                    title = column + ' - ' + title_to_append
-                    
+                    title = column + ' - ' + title_to_append                    
                 else:    
                     title = title + ' - ' + str(title_to_append)
         
@@ -388,37 +409,59 @@ class Analyzer:
         df[metric_to_plot] = score_column
 
         if len(columns_with_numeric_values) == 2:
-            x = df[columns_with_numeric_values[0]]
-            y = df[columns_with_numeric_values[1]]
-            z = df[metric_to_plot]
+            traces = []
+            color_scales = self.plotter.color_scales
+            color_scale_iterator = iter(color_scales)
             
-            color = df[columns_with_no_numeric_values[0]]
+            colors = self.plotter.color_list
+            colors_iterator = iter(colors)
+            
+            for non_numeric_column in columns_with_no_numeric_values:
+                unique_groups_in_non_numeric_column = list(df.groupby(columns_with_no_numeric_values[0]).groups.keys())
                 
-            trace_train = go.Mesh3d(x=x,y=y,z=z,
-                       alphahull=3,
-                       opacity=.5,
-                       colorscale="Reds",
-                       intensity=z,   
-                       facecolor = z                       
-                       )
+                for group in unique_groups_in_non_numeric_column:
+                    temp_df = df.where(df[non_numeric_column] == group).copy()
+                    temp_df = temp_df.dropna()
+
+                    x = temp_df[columns_with_numeric_values[0]] 
+                    y = temp_df[columns_with_numeric_values[1]]
+                    z = temp_df[metric_to_plot]     
             
-    #        trace_test = go.Mesh3d(x=x,y=y,z=z,
-    #                   alphahull=3,
-    #                   opacity=.5,
-    #                   colorscale="Greens",
-    #                   intensity=color,                        
-    #                   )
-            
-            traces = [trace_train]
                 
-            plotly.offline.plot(traces)            
+                    trace = go.Mesh3d(x=x,y=y,z=z,
+                               alphahull=3,
+                               opacity=.5,
+                               colorscale=next(color_scale_iterator),
+                               intensity=z,   
+                               facecolor = z,
+                               name = group,
+                               )
+
+                    traces.append(trace)
+
+            fig = go.Figure(data=traces)
+            fig.update_layout(
+                                title = title,
+                            )
+            fig.update_layout(scene = dict(
+                                xaxis_title= x.name.split('__')[-1],
+                                yaxis_title= y.name.split('__')[-1],
+                                zaxis_title= metric_to_plot),          
+                                )
             
+            fig.update_layout(
+                               hoverlabel_bgcolor = 'black',
+                            )
+
+            filename = os.path.join(os.getcwd(), title + '.html')   
+            plotly.offline.plot(fig, show_link = True, filename = filename)                 
         else:
             for column_name in columns_with_numeric_values:                
-                fig = px.line(df, x=column_name, y=metric_to_plot, color=columns_with_no_numeric_values[0], title = title)
+                fig = px.line(df, x=column_name, y=metric_to_plot, color=columns_with_no_numeric_values[0], title = title)                
+                fig.update_xaxes(title = column_name.split('__')[-1])
                 fig.show()
-
         return True
+
 
 
     def plot_all_experiments(self, experiment_wise_data_df):
@@ -430,7 +473,6 @@ class Analyzer:
             extracted_experiment_df = parameters_to_plot.loc[row_indexes, column_indexes]
             
             self.__plot_experiment(extracted_experiment_df)
-#            parallel.compute(extracted_experiment_df, __plot_experiment)
             
             
 
@@ -462,6 +504,7 @@ if __name__ == '__main__':
     from sklearn.feature_selection import RFE
     from sklearn.svm import SVR
     from sklearn.impute import SimpleImputer
+    from sklearn.preprocessing import StandardScaler
 
 
     global_random_seed = 0
@@ -489,7 +532,7 @@ if __name__ == '__main__':
     import plotly.graph_objects as go
     
 
-    def get_equally_spaced_numbers_in_range(self, min_num = 1, max_num =100, total_numbers =10):
+    def get_equally_spaced_numbers_in_range(min_num = 1, max_num =100, total_numbers =10):
         equally_spaced_numbers_list = np.linspace(min_num, max_num,total_numbers)
         equally_spaced_numbers_list = equally_spaced_numbers_list.astype(int)
         equally_spaced_numbers_list = np.unique(equally_spaced_numbers_list)
@@ -512,22 +555,27 @@ if __name__ == '__main__':
 
 
     ExtraTreesRegressor_params =    {
-#                                        'max_depth': [1,10] , 
+#                                        'max_depth': get_equally_spaced_numbers_in_range(1,100,10) , 
 #                                        'n_estimators': get_equally_spaced_numbers_in_range(1,2000,10),
-                                        'max_depth': [1] , 
-                                        'n_estimators': [1],                                        
+
+                                        'max_depth': get_equally_spaced_numbers_in_range(1,4,4) ,
+                                        'n_estimators': get_equally_spaced_numbers_in_range(2,4,4),
+                                        'random_state' : [global_random_seed]
+#                                        'max_depth': [1] , 
+#                                        'n_estimators': [1], 
+                                        
                                     }
     
     
     KNeighborsRegressor_params =    {
-#                                        'n_neighbors' : [2,3,4],
-                                        'n_neighbors' : [2],
+                                        'n_neighbors' : [2,3,4],
+#                                        'n_neighbors' : [2],
                                     }
     
     
     bayesianRidge_params =          {
-                                        'n_iter' : [300,600,900]
-#                                        'n_iter' : [300]
+#                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
+                                        'n_iter' : [300]
                                     }
     
     
@@ -542,6 +590,7 @@ if __name__ == '__main__':
     iterative_imputer_params =      {
                                         'estimator' : estimator_list,
                                         'missing_values' : [np.nan],
+                                        'random_state' : [global_random_seed]
                                     }
     
     
@@ -600,7 +649,8 @@ if __name__ == '__main__':
 #    selector = RFE(estimator, 5, step=1)
 
     steps = [
-                ('multitf' , MultiTf() ),  
+                ('multitf' , MultiTf() ), 
+                ('scaler' , StandardScaler() ),
 #                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
                 ('multiregressor' , MultiRegressor() ) 
             ]
@@ -613,15 +663,24 @@ if __name__ == '__main__':
 
     
     
-    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')   
+    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
 #    cv_results_multiple_aug_21 = cv_results
 #    database.save(cv_results_multiple_aug_21)
     
 #    cv_results = database.load('cv_results_multiple_aug_21')
 
-    auto_imputer = Analyzer()
-    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error')
+    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = False)
+    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', verbose = 0)
     auto_imputer.fit(joint_df, y_train)
+    auto_imputer.make_plots()
+#    
+#    auto_imputer_aug29 = auto_imputer
+#    database.save(auto_imputer)
+    
+#    database.load(auto_imputer_aug29)
+
+
+    
     
     
 

@@ -2,3 +2,23 @@
 tree\.pdf
 results/
 archive/
+
+_parallel_categories_plot\.html
+
+Imputer Analysis_parallel_categories_plot\.html
+
+multiregressor__estimator_box_with_mean\.html
+
+multitf__transformer - IterativeImputer - ExtraTreesRegressor - 0\.0 - 0\.0\.html
+
+multitf__transformer__estimator_box_with_mean\.html
+
+multitf__transformer_box_with_mean\.html
+
+__pycache__/MultiWrappers\.cpython-36\.pyc
+
+__pycache__/ParallelCPU\.cpython-36\.pyc
+
+__pycache__/Plotter\.cpython-36\.pyc
+
+__pycache__/SaveAndLoad\.cpython-36\.pyc
