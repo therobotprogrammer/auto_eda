@@ -65,20 +65,20 @@ class SaveAndLoad:
             os.makedirs(save_directory )
         self.save_directory = save_directory
 
-    def save(self, *args):
-        get_rid_of = ['save(', ',', ')', '\n']
-        calling_code = inspect.getouterframes(inspect.currentframe())[1][4][0]
-        calling_code = calling_code[calling_code.index('save'):]
-        
-        for garbage in get_rid_of:
-            calling_code = calling_code.replace(garbage, '')
-        var_names, var_values = calling_code.split(), args
-        dyn_dict = {var_name: var_value for var_name, var_value in
-                    zip(var_names, var_values)}
-        variable_name = list(dyn_dict.keys())[0]        
-        
-        
-        variable_name = str(variable_name)
+    def save(self, *args, variable_name = ''):
+        if variable_name == '':
+            get_rid_of = ['save(', ',', ')', '\n']
+            calling_code = inspect.getouterframes(inspect.currentframe())[1][4][0]
+            calling_code = calling_code[calling_code.index('save'):]
+            
+            for garbage in get_rid_of:
+                calling_code = calling_code.replace(garbage, '')
+            var_names, var_values = calling_code.split(), args
+            dyn_dict = {var_name: var_value for var_name, var_value in
+                        zip(var_names, var_values)}
+            variable_name = list(dyn_dict.keys())[0]       
+            variable_name = str(variable_name)
+            
         variable_value = args        
         self.__helper_save_with_pickle(variable_name, variable_value)
 
@@ -97,11 +97,17 @@ class SaveAndLoad:
 
     def __helper_load_with_pickle(self, variable_name):        
         filename = os.path.join(self.save_directory, variable_name  + '.object')
-        print('Loading:' , filename)
-        file = open(filename, 'rb')
-        data = pickle.load(file)[0]
-        file.close()
+        
+        if os.path.isfile(filename):
+            print('Loading:' , filename)
+            file = open(filename, 'rb')
+            data = pickle.load(file)[0]
+            file.close()
+        else:
+            data = None
+        
         return data
+    
 
 
 if __name__ == '__main__':

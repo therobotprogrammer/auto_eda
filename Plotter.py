@@ -73,6 +73,21 @@ class Plotter:
             'turquoise', 'violet', 'wheat', 'white', 'whitesmoke',\
             'yellow', 'yellowgreen']
         
+        self.color_scales = ['aggrnyl', 'agsunset', 'algae', 'amp', 'armyrose', 'balance',
+             'blackbody', 'bluered', 'blues', 'blugrn', 'bluyl', 'brbg',
+             'brwnyl', 'bugn', 'bupu', 'burg', 'burgyl', 'cividis', 'curl',
+             'darkmint', 'deep', 'delta', 'dense', 'earth', 'edge', 'electric',
+             'emrld', 'fall', 'geyser', 'gnbu', 'gray', 'greens', 'greys',
+             'haline', 'hot', 'hsv', 'ice', 'icefire', 'inferno', 'jet',
+             'magenta', 'magma', 'matter', 'mint', 'mrybm', 'mygbm', 'oranges',
+             'orrd', 'oryel', 'peach', 'phase', 'picnic', 'pinkyl', 'piyg',
+             'plasma', 'plotly3', 'portland', 'prgn', 'pubu', 'pubugn', 'puor',
+             'purd', 'purp', 'purples', 'purpor', 'rainbow', 'rdbu', 'rdgy',
+             'rdpu', 'rdylbu', 'rdylgn', 'redor', 'reds', 'solar', 'spectral',
+             'speed', 'sunset', 'sunsetdark', 'teal', 'tealgrn', 'tealrose',
+             'tempo', 'temps', 'thermal', 'tropic', 'turbid', 'twilight',
+             'viridis', 'ylgn', 'ylgnbu', 'ylorbr', 'ylorrd']
+        
         
     def set_current_dir(self, local_folder_name): 
         if local_folder_name == '':
@@ -309,7 +324,12 @@ class Plotter:
         plotly.offline.plot(fig, show_link = True, filename = filename)        
     
 
+    def line_plot(self, df, x_columns , y_columns, color_columns, message = ''):
+        fig = px.line(df, x_columns, y_columns, color_columns)
         
+        filename = os.path.join(self.current_directory, message + '_parallel_categories_plot.html')   
+        plotly.offline.plot(fig, show_link = True, filename = filename)    
+
 
 if __name__ == '__main__':
     import sys
