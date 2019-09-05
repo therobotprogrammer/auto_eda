@@ -395,11 +395,7 @@ def get_chi_square_and_ks_test(all_distributions_df):
     # Get histogram of original data
     y, x = np.histogram(y_std, bins=bins, density=True)
     x = (x + np.roll(x, -1))[:-1] / 2.0
-    
-    
-    
-    
-    
+
     results = pd.DataFrame()
 
     for idx, distribution in enumerate(all_distributions_df.columns):
@@ -482,7 +478,7 @@ def get_chi_square_and_ks_test(all_distributions_df):
 from ParallelCPU import ParallelCPU
 #results = parallise(all_distributions_df, function = get_chi_square_and_ks_test)
 
-parallel = ParallelCPU(debug_mode = True)
+parallel = ParallelCPU(debug_mode = False)
 results = parallel.compute(all_distributions_df, function = get_chi_square_and_ks_test)
 
 # Report results

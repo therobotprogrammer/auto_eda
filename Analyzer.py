@@ -19,19 +19,27 @@ import colorlover as cl
 
 
 from ParallelCPU import ParallelCPU
+import deep_compare
+import copy
 
+from deep_eq import deep_eq
 
 
 
 
 class Analyzer:
-    def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False):        
+    def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False, use_precomputed_results = True):        
         self.config = None
         self.pipeline = None
         self.lower_is_better = False  
         self.scoring = None
         self.show_plots = show_plots
         self.message = message
+        self.use_precomputed_results = use_precomputed_results
+        
+        if use_precomputed_results == True:
+            assert(database is not None)
+        
         
         database_top_directory = database.save_directory
         database_sub_directory = os.path.join(database_top_directory, 'Analyzer', message)
@@ -53,6 +61,8 @@ class Analyzer:
         self.processed_results_dict = None
 
 
+                    
+                    
     def gererate_params(self, config_dict):        
         generated_params = self.__dp(config_dict)
         return generated_params
@@ -64,53 +74,210 @@ class Analyzer:
         self.pipeline = pipeline
         self.grid_search_params = self.gererate_params(config) 
 
-        self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **kwargs)        
+
+    import inspect
+
+    def __compare_two_params(self, param1, param2):
+        if len(param1.keys()) != len(param2.keys()) :
+            return False
+              
+        for key, value in param1.items():            
+            if key in param2:
+                v1 = param1[key][0]
+                v2 = param2[key][0]
+                
+                
+                #converting to string as some arguments are functions or nan
+                if v1 == v2:
+                    continue
+                elif ('sklearn' in str(type(v1)) ) and ('sklearn' in str(type(v1)) ) and (type(v1) == type(v2) ):
+                    #it is a function of sklearn that matches. 
+                    #this is a workaround, because when saving xgboost(), the missing=None becomes missing=nan within this function. 
+                    #this causes the equality to fail. this is a workaround.
+                    return True
+                
+                else:
+                    return False
+            else:
+                return False   
+        print(True)                  
+        return True        
+                
+            
+    
+    def load_precomputed_results(self, X, y):
+        precomputed_result_archive = self.database.load('precomputed_result_archive')
+
+        reduced_grid_search_params = []
+        self.precomputed_result = None 
+        self.params_to_load_from_memory = None
+        self.precomputed_result_found = False
+        
+        
+        
+        self.params_skipped_computation = None
+        self.processed_results_dict_skipped_computation = {}
+        
+        
+        matching_precomputed_result = {}
+
+        
+        if precomputed_result_archive is not None: 
+            for result in precomputed_result_archive:                
+                if result['X'].equals(X) and result['y'].equals(y):
+                    self.precomputed_result = result
+                    self.precomputed_result_found = True
+                    
+                    matching_pre_computed_idx = []
+                    matching_pre_computed_params = []
+                    matching_pre_computed_processed_results_dict = {}
 
 
-    def load_precomputed_results(self, df):
-        train_database_archive_list = self.database.load('train_database_archive')
-        
-        df_found_in_archive = False
-        archived_df = None
-        archived_params = None
-        
-        if train_database_archive_list is not None: 
-            for entry in train_database_archive_list:
-                curr_df = entry[0]
-                
-                if curr_df.equals(df):
-                    archived_df = entry[0]
-                    archived_params = entry[1]
-                    df_found_in_archive = true
-                    break
-                
-        if df_found_in_archive:
-            parameters_to_bypass_computation = []
-            
-            for param in self.grid_search_params:
-                if param in archived_params:
-                    parameters_to_bypass_computation.append[param]
-            
-            
+                    for idx_grid_search_params, new_grid_search_param in enumerate(self.grid_search_params): 
+                        found = False
+                        for idx_precomputed_params, precomputed_param in enumerate(self.precomputed_result['params']):
+                            #to do: verify this with unit tests
+                            ### to do >>>>>>>>>>>>>>>> this does not work
+                            if self.__compare_two_params(new_grid_search_param, precomputed_param):
+#                            if  deep_eq(new_grid_search_param, precomputed_param):
+
+                                matching_pre_computed_idx.append(idx_precomputed_params)
+                                matching_pre_computed_params.append(precomputed_param)
+                                
+                                found = True
+                                break
+                        if not found:                            
+                            reduced_grid_search_params.append(new_grid_search_param)
+
+
+                    for key, df in self.precomputed_result['processed_results_dict'].items():
+                        matching_pre_computed_processed_results_dict[key] = df.iloc[matching_pre_computed_idx]
+
+                    matching_precomputed_result['params'] = matching_pre_computed_params
+                    matching_precomputed_result['processed_results_dict'] = matching_pre_computed_processed_results_dict
+                    
+                    return matching_precomputed_result, reduced_grid_search_params
+                    
+        else:
+             return matching_precomputed_result, self.grid_search_params
+
+
+
             ################# continue from here######################
 #            self.grid_search_params = self.grid_search_params.
         
+#    def update_precomputed_results(self, X, y, new_params, )    :
+        
+        
+#    def merge_precomputed_results():
+        
+    
+    def update_precomputed_result_archive(self, X, y, new_params, new_processed_results_dict):
+#        
+#        u1 = new_params[0]['multiregressor__estimator']
+#        
+#        self.database.save(u1)
+#        
+#        u1 = str(u1)
+#
+#        u2 = self.database.load('u1')
+#        
+#        u2 = str(u2)
+#        
+#        u1 == u2
         
 
-    def fit(self, X, y):
-        t1 = time.time()
-        self.grid_search_estimator.fit(X, y)
-        t2 = time.time()         
-        self.processing_time_ = t2-t1   
+
+                        
+        precomputed_result_archive = self.database.load('precomputed_result_archive')
         
-        self.cv_results = self.grid_search_estimator.cv_results_    
-        self.processed_results_dict = self.process_results(self.cv_results, self.pipeline, compact_version = False)
+        if self.precomputed_result_found:
+                self.precomputed_result['params'].append(new_params)
+                
+                for key, df in self.precomputed_result['processed_results_dict'].items():
+                    df = df.append(new_processed_results_dict[key], ignore_index=True)  
+                    
+                self.database.save(precomputed_result_archive)   
+                
+        else:            
+            if precomputed_result_archive is None:
+                precomputed_result_archive = []        
+
+            result = {}            
+            result['X'] = X
+            result['y'] = y
+            result['params'] = new_params
+            result['processed_results_dict'] = new_processed_results_dict
+            
+            precomputed_result_archive.append(result)            
+            self.database.save(precomputed_result_archive)
+
+
+    def fit(self, X, y):        
+        #to do: remove this
+        if self.use_precomputed_results:
+            matching_precomputed_result, reduced_grid_search_params = self.load_precomputed_results(X,y)
+            
+            if reduced_grid_search_params == []:
+                #all parameters found in archive
+                self.processed_results_dict = matching_precomputed_result['processed_results_dict']
+
+
+            else:
+                reduced_grid_search_params_copy = copy.deepcopy(reduced_grid_search_params)
+                
+#                p1 = reduced_grid_search_params[0]['multiregressor__estimator']
+#                p1 = str(p1)
+                
+                self.grid_search_estimator = GridSearchCV(self.pipeline, reduced_grid_search_params_copy, **self.grid_search_arguments)    
+                
+
+                
+                
+                t1 = time.time()
+                self.grid_search_estimator.fit(X, y)
+                t2 = time.time()         
+                self.processing_time_ = t2-t1   
+                
+                self.cv_results = self.grid_search_estimator.cv_results_    
+                self.processed_results_dict = self.process_results(self.cv_results, self.pipeline, compact_version = False)
+                
+                self.update_precomputed_result_archive(X, y, reduced_grid_search_params, self.processed_results_dict)        
+                
+                p2 = reduced_grid_search_params[0]['multiregressor__estimator']
+                p2 = str(p2)                
+                
+                p3 = reduced_grid_search_params_copy[0]['multiregressor__estimator']
+                p3 = str(p3)                     
+                
+#                #to do: merge here
+#                self.processed_results_dict = matching_precomputed_result['processed_results_dict']
+#
+#
+#                #load back precomputed data
+#                for key, df in self.processed_results_dict.items():
+#                    df = df.append(self.matching_precomputed_result['processed_results_dict'][key], ignore_index=True)     
+
+
+        else:
+            self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **kwargs)        
+
+            t1 = time.time()
+            self.grid_search_estimator.fit(X, y)
+            t2 = time.time()         
+            self.processing_time_ = t2-t1   
+            
+            self.cv_results = self.grid_search_estimator.cv_results_    
+            self.processed_results_dict = self.process_results(self.cv_results, self.pipeline, compact_version = False)
+
+
 
         if self.show_plots:
             self.make_plots()
 
+        
     def make_plots(self):
-            self.scoring = self.grid_search_estimator.scoring
+            self.scoring = self.grid_search_arguments['scoring']
             
             #make parallel categories plot
             self.plotter.parallel_categories(self.processed_results_dict['parameters_to_plot'] , self.processed_results_dict['scores'], score_name_to_plot = 'mean_test_score', message = self.message)                                
@@ -409,37 +576,92 @@ class Analyzer:
         df[metric_to_plot] = score_column
 
         if len(columns_with_numeric_values) == 2:
-            traces = []
             color_scales = self.plotter.color_scales
+            color_scales = cl.scales['9']['seq']
             color_scale_iterator = iter(color_scales)
             
             colors = self.plotter.color_list
             colors_iterator = iter(colors)
             
-            for non_numeric_column in columns_with_no_numeric_values:
-                unique_groups_in_non_numeric_column = list(df.groupby(columns_with_no_numeric_values[0]).groups.keys())
-                
-                for group in unique_groups_in_non_numeric_column:
-                    temp_df = df.where(df[non_numeric_column] == group).copy()
-                    temp_df = temp_df.dropna()
+            traces = []
 
-                    x = temp_df[columns_with_numeric_values[0]] 
-                    y = temp_df[columns_with_numeric_values[1]]
-                    z = temp_df[metric_to_plot]     
             
+            
+
+            for non_numeric_column in columns_with_no_numeric_values:
+
+                if len(columns_with_no_numeric_values) == 0:
+                    unique_groups_in_non_numeric_column = list(df.groupby(columns_with_no_numeric_values[0]).groups.keys())
+                    
+                    for group in unique_groups_in_non_numeric_column:
+    
+                        temp_df = df.where(df[non_numeric_column] == group).copy()
+                        temp_df = temp_df.dropna()
+    #                    temp_df = temp_df.reset_index()
+    
+                        x = temp_df[columns_with_numeric_values[0]] 
+                        y = temp_df[columns_with_numeric_values[1]]
+                        z = temp_df[metric_to_plot]     
                 
-                    trace = go.Mesh3d(x=x,y=y,z=z,
-                               alphahull=3,
-                               opacity=.5,
-                               colorscale=next(color_scale_iterator),
-                               intensity=z,   
-                               facecolor = z,
-                               name = group,
-                               )
+                    
+                        trace = go.Mesh3d(x=x,y=y,z=z,
+    #                               alphahull=3,
+                                   opacity=.5,
+    #                               colorscale=next(color_scale_iterator),
+                                   intensity=z,   
+    #                               facecolor = z,
+                                   name = group,
+                                   flatshading = True,
+                                   contour_show = True,
+                                   contour_width = 10
+                                   )
+    
+                        traces.append(trace)
+    
+    
+    
+                        fig = go.Figure(data=trace)
+                        fig.update_layout(
+                                            title = title + '__' + group,
+                                        )
+                        fig.update_layout(scene = dict(
+                                            xaxis_title= x.name.split('__')[-1],
+                                            yaxis_title= y.name.split('__')[-1],
+                                            zaxis_title= metric_to_plot),          
+                                            )
+                        
+                        fig.update_layout(
+                                           hoverlabel_bgcolor = 'black',
+                                        )
+            
+                        filename = os.path.join(os.getcwd(), title + '__' + group + '.html')   
+                        plotly.offline.plot(fig, show_link = True, filename = filename)   
+                    
+                    
 
-                    traces.append(trace)
-
-            fig = go.Figure(data=traces)
+            
+            if len(columns_with_no_numeric_values) == 0:
+                temp_df = df.dropna()
+                x = temp_df[columns_with_numeric_values[0]] 
+                y = temp_df[columns_with_numeric_values[1]]
+                z = temp_df[metric_to_plot]     
+        
+            
+                trace = go.Mesh3d(x=x,y=y,z=z,
+#                               alphahull=3,
+                           opacity=.5,
+#                               colorscale=next(color_scale_iterator),
+                           intensity=z,   
+#                               facecolor = z,
+                           flatshading = True,
+                           contour_show = True,
+                           contour_width = 10
+                           )
+                fig = go.Figure(data=trace)
+                
+            else:                
+                fig = go.Figure(data=traces)
+                
             fig.update_layout(
                                 title = title,
                             )
@@ -453,14 +675,19 @@ class Analyzer:
                                hoverlabel_bgcolor = 'black',
                             )
 
-            filename = os.path.join(os.getcwd(), title + '.html')   
-            plotly.offline.plot(fig, show_link = True, filename = filename)                 
+            filename = os.path.join(os.getcwd(), title + '__' + 'all traces' + '.html')   
+            plotly.offline.plot(fig, show_link = True, filename = filename) 
+            
         else:
-            for column_name in columns_with_numeric_values:                
-                fig = px.line(df, x=column_name, y=metric_to_plot, color=columns_with_no_numeric_values[0], title = title)                
-                fig.update_xaxes(title = column_name.split('__')[-1])
-                fig.show()
-        return True
+            for column_name in columns_with_numeric_values:    
+                if len(columns_with_no_numeric_values) == 0:
+                    fig = px.line(df, x=column_name, y=metric_to_plot, title = title)                
+                    fig.update_xaxes(title = column_name.split('__')[-1])
+                    fig.show()
+                else:                    
+                    fig = px.line(df, x=column_name, y=metric_to_plot, color=columns_with_no_numeric_values[0], title = title)                
+                    fig.update_xaxes(title = column_name.split('__')[-1])
+                    fig.show()
 
 
 
@@ -505,6 +732,8 @@ if __name__ == '__main__':
     from sklearn.svm import SVR
     from sklearn.impute import SimpleImputer
     from sklearn.preprocessing import StandardScaler
+    from sklearn.ensemble import AdaBoostRegressor
+    from sklearn.neighbors import KNeighborsRegressor
 
 
     global_random_seed = 0
@@ -555,11 +784,11 @@ if __name__ == '__main__':
 
 
     ExtraTreesRegressor_params =    {
-#                                        'max_depth': get_equally_spaced_numbers_in_range(1,100,10) , 
-#                                        'n_estimators': get_equally_spaced_numbers_in_range(1,2000,10),
+                                        'max_depth': get_equally_spaced_numbers_in_range(1,100,10) , 
+                                        'n_estimators': get_equally_spaced_numbers_in_range(1,2000,10),
 
-                                        'max_depth': get_equally_spaced_numbers_in_range(1,4,4) ,
-                                        'n_estimators': get_equally_spaced_numbers_in_range(2,4,4),
+#                                        'max_depth': get_equally_spaced_numbers_in_range(1,4,4) ,
+#                                        'n_estimators': get_equally_spaced_numbers_in_range(2,4,4),
                                         'random_state' : [global_random_seed]
 #                                        'max_depth': [1] , 
 #                                        'n_estimators': [1], 
@@ -574,8 +803,8 @@ if __name__ == '__main__':
     
     
     bayesianRidge_params =          {
-#                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
-                                        'n_iter' : [300]
+                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
+#                                        'n_iter' : [300,600,900]
                                     }
     
     
@@ -615,9 +844,12 @@ if __name__ == '__main__':
     
     
     multi_regressor_params =        {   
-                                        'estimator' : [XGBRegressor(), LinearRegression()]
+                                        'estimator' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ]
                                     }
     
+#    multi_regressor_params =        {   
+#                                        'estimator' : [XGBRegressor() ]
+#                                    }    
     
     
     SelectFromModel_params =        {
@@ -650,7 +882,7 @@ if __name__ == '__main__':
 
     steps = [
                 ('multitf' , MultiTf() ), 
-                ('scaler' , StandardScaler() ),
+#                ('scaler' , StandardScaler() ),
 #                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
                 ('multiregressor' , MultiRegressor() ) 
             ]
@@ -664,20 +896,20 @@ if __name__ == '__main__':
     
     
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
-#    cv_results_multiple_aug_21 = cv_results
-#    database.save(cv_results_multiple_aug_21)
-    
-#    cv_results = database.load('cv_results_multiple_aug_21')
 
-    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = False)
-    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', verbose = 0)
-    auto_imputer.fit(joint_df, y_train)
-    auto_imputer.make_plots()
-#    
-#    auto_imputer_aug29 = auto_imputer
+    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = False, show_plots = True)
+    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', verbose = 1)
+    
+#    auto_imputer = database.load('auto_imputer_aug30')
+    
+#    auto_imputer.make_plots()
+
+#
+#    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = False, show_plots = False)
+#    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', verbose = 1)    
+    auto_imputer.fit(joint_df, y_train)    
 #    database.save(auto_imputer)
     
-#    database.load(auto_imputer_aug29)
 
 
     
