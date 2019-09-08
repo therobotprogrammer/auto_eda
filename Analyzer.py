@@ -23,12 +23,12 @@ import deep_compare
 import copy
 
 from deep_eq import deep_eq
-
+import math
 
 
 
 class Analyzer:
-    def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False, use_precomputed_results = True):        
+    def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False, use_precomputed_results = True, compact_plots = True):        
         self.config = None
         self.pipeline = None
         self.lower_is_better = False  
@@ -36,6 +36,7 @@ class Analyzer:
         self.show_plots = show_plots
         self.message = message
         self.use_precomputed_results = use_precomputed_results
+        self.compact_plots = compact_plots
         
         if use_precomputed_results == True:
             assert(database is not None)
@@ -77,16 +78,33 @@ class Analyzer:
 
     import inspect
 
+
+    #this function is needed because math.isnan() will raise an error if it is given a function
+    #sometimes we have to check for functions. 
+    def check_for_nan(self, v1,v2):
+        value_to_return = False
+        
+        try:
+            if (math.isnan(v1)) and (math.isnan(v2)):
+                value_to_return = True
+
+        except Exception:
+            pass                 
+            
+        return value_to_return
+        
     def __compare_two_params(self, param1, param2):
         if len(param1.keys()) != len(param2.keys()) :
             return False
               
+        match = False
         for key, value in param1.items():            
             if key in param2:
                 v1 = param1[key][0]
                 v2 = param2[key][0]
                 
-                
+#                print('>>>>>v1: ' , v1)
+#                print('>>>>>v2: ' , v2)
                 #converting to string as some arguments are functions or nan
                 if v1 == v2:
                     continue
@@ -94,13 +112,18 @@ class Analyzer:
                     #it is a function of sklearn that matches. 
                     #this is a workaround, because when saving xgboost(), the missing=None becomes missing=nan within this function. 
                     #this causes the equality to fail. this is a workaround.
-                    return True
+                    continue
+
+                elif v1 is None and v2 is None:
+                    continue
+                
+                elif self.check_for_nan(v1,v2):
+                    continue
                 
                 else:
                     return False
             else:
                 return False   
-        print(True)                  
         return True        
                 
             
@@ -112,6 +135,7 @@ class Analyzer:
         self.precomputed_result = None 
         self.params_to_load_from_memory = None
         self.precomputed_result_found = False
+        self.precomputed_archive_id = None
         
         
         
@@ -123,10 +147,11 @@ class Analyzer:
 
         
         if precomputed_result_archive is not None: 
-            for result in precomputed_result_archive:                
+            for archive_id, result in enumerate(precomputed_result_archive):                
                 if result['X'].equals(X) and result['y'].equals(y):
                     self.precomputed_result = result
                     self.precomputed_result_found = True
+                    self.precomputed_archive_id = archive_id
                     
                     matching_pre_computed_idx = []
                     matching_pre_computed_params = []
@@ -172,48 +197,20 @@ class Analyzer:
 #    def merge_precomputed_results():
         
     
-    def update_precomputed_result_archive(self, X, y, new_params, new_processed_results_dict):
-#        
-#        u1 = new_params[0]['multiregressor__estimator']
-#        
-#        self.database.save(u1)
-#        
-#        u1 = str(u1)
-#
-#        u2 = self.database.load('u1')
-#        
-#        u2 = str(u2)
-#        
-#        u1 == u2
-        
 
 
-                        
-        precomputed_result_archive = self.database.load('precomputed_result_archive')
-        
-        if self.precomputed_result_found:
-                self.precomputed_result['params'].append(new_params)
-                
-                for key, df in self.precomputed_result['processed_results_dict'].items():
-                    df = df.append(new_processed_results_dict[key], ignore_index=True)  
-                    
-                self.database.save(precomputed_result_archive)   
-                
-        else:            
-            if precomputed_result_archive is None:
-                precomputed_result_archive = []        
 
-            result = {}            
-            result['X'] = X
-            result['y'] = y
-            result['params'] = new_params
-            result['processed_results_dict'] = new_processed_results_dict
-            
-            precomputed_result_archive.append(result)            
-            self.database.save(precomputed_result_archive)
+    def process_results(self, cv_results, pipeline):        
+        processed_results_dict = self.__get_params_and_scores(cv_results)
+        processed_results_dict =  self.__convert_functions_to_class_names(processed_results_dict)        
+        #remove features for which multiple variations were not needed
+#        processed_results_dict = self.__remove_variance(processed_results_dict, compact_version)        
+        processed_results_dict = self.__order_wrt_pipeline(processed_results_dict, pipeline)       
+        return processed_results_dict
+    
+    
 
-
-    def fit(self, X, y):        
+    def fit(self, X, y):              
         #to do: remove this
         if self.use_precomputed_results:
             matching_precomputed_result, reduced_grid_search_params = self.load_precomputed_results(X,y)
@@ -240,7 +237,7 @@ class Analyzer:
                 self.processing_time_ = t2-t1   
                 
                 self.cv_results = self.grid_search_estimator.cv_results_    
-                self.processed_results_dict = self.process_results(self.cv_results, self.pipeline, compact_version = False)
+                self.processed_results_dict = self.process_results(self.cv_results, self.pipeline)
                 
                 self.update_precomputed_result_archive(X, y, reduced_grid_search_params, self.processed_results_dict)        
                 
@@ -260,7 +257,7 @@ class Analyzer:
 
 
         else:
-            self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **kwargs)        
+            self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **self.grid_search_arguments)        
 
             t1 = time.time()
             self.grid_search_estimator.fit(X, y)
@@ -268,15 +265,54 @@ class Analyzer:
             self.processing_time_ = t2-t1   
             
             self.cv_results = self.grid_search_estimator.cv_results_    
-            self.processed_results_dict = self.process_results(self.cv_results, self.pipeline, compact_version = False)
+            self.processed_results_dict = self.process_results(self.cv_results, self.pipeline)
 
 
 
         if self.show_plots:
             self.make_plots()
 
+
+
+    def update_precomputed_result_archive(self, X, y, new_params, new_processed_results_dict):
+        precomputed_result_archive = self.database.load('precomputed_result_archive')
+
+
+
+        if self.precomputed_result_found:
+#                precomputed_result_archive[self.precomputed_archive_id]['params'] = precomputed_result_archive[self.precomputed_archive_id]['params'].append(new_params)
+#                self.precomputed_result['cv_result'].append(new_params)
+            
+            precomputed_result_archive[self.precomputed_archive_id]['params'] = precomputed_result_archive[self.precomputed_archive_id]['params'] + new_params
+            
+            for key, df in precomputed_result_archive[self.precomputed_archive_id]['processed_results_dict'].items():
+                precomputed_result_archive[self.precomputed_archive_id]['processed_results_dict'][key] = df.append(new_processed_results_dict[key], ignore_index=True)
+
+#                    self.precomputed_result['processed_results_dict'][key] = df.append(new_processed_results_dict[key], ignore_index=True)  
+                
+            self.database.save(precomputed_result_archive)   
+                
+        else:            
+            if precomputed_result_archive is None:
+                precomputed_result_archive = []        
+
+            result = {}            
+            result['X'] = X
+            result['y'] = y
+            result['params'] = new_params
+            result['processed_results_dict'] = new_processed_results_dict
+            
+#            result['cv_result'].append(new_params)
+            
+            precomputed_result_archive.append(result)            
+            self.database.save(precomputed_result_archive)
+
+
+
         
     def make_plots(self):
+            self.processed_results_dict = self.__remove_variance(self.processed_results_dict, self.compact_plots)        
+
             self.scoring = self.grid_search_arguments['scoring']
             
             #make parallel categories plot
@@ -426,13 +462,7 @@ class Analyzer:
     
         return processed_results_dict
     
-    def process_results(self, cv_results, pipeline, compact_version = False):        
-        processed_results_dict = self.__get_params_and_scores(cv_results)
-        processed_results_dict =  self.__convert_functions_to_class_names(processed_results_dict)        
-        #remove features for which multiple variations were not needed
-        processed_results_dict = self.__remove_variance(processed_results_dict, compact_version)        
-        processed_results_dict = self.__order_wrt_pipeline(processed_results_dict, pipeline)       
-        return processed_results_dict
+
     
     
     
@@ -681,10 +711,12 @@ class Analyzer:
         else:
             for column_name in columns_with_numeric_values:    
                 if len(columns_with_no_numeric_values) == 0:
+                    df = df.sort_values(by = column_name)
                     fig = px.line(df, x=column_name, y=metric_to_plot, title = title)                
                     fig.update_xaxes(title = column_name.split('__')[-1])
                     fig.show()
-                else:                    
+                else: 
+                    df = df.sort_values(by = column_name)
                     fig = px.line(df, x=column_name, y=metric_to_plot, color=columns_with_no_numeric_values[0], title = title)                
                     fig.update_xaxes(title = column_name.split('__')[-1])
                     fig.show()
@@ -803,16 +835,16 @@ if __name__ == '__main__':
     
     
     bayesianRidge_params =          {
-                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
-#                                        'n_iter' : [300,600,900]
+#                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
+                                        'n_iter' : [3,5,1,2]
                                     }
     
     
     estimator_list =                [   
                                         {BayesianRidge() : bayesianRidge_params},
-                                        DecisionTreeRegressor(),
-                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
-                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
+#                                        DecisionTreeRegressor(),
+#                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+#                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                                     ]
     
     
@@ -882,7 +914,7 @@ if __name__ == '__main__':
 
     steps = [
                 ('multitf' , MultiTf() ), 
-#                ('scaler' , StandardScaler() ),
+                ('scaler' , StandardScaler() ),
 #                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
                 ('multiregressor' , MultiRegressor() ) 
             ]
@@ -897,10 +929,10 @@ if __name__ == '__main__':
     
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
 
-    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = False, show_plots = True)
+    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = True)
     auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', verbose = 1)
     
-#    auto_imputer = database.load('auto_imputer_aug30')
+#    auto_imputer = database.load('auto_imputer_sep_08')
     
 #    auto_imputer.make_plots()
 
@@ -908,8 +940,10 @@ if __name__ == '__main__':
 #    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = False, show_plots = False)
 #    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', verbose = 1)    
     auto_imputer.fit(joint_df, y_train)    
-#    database.save(auto_imputer)
     
+#    auto_imputer_sep_08 = auto_imputer
+#    database.save(auto_imputer_sep_08)
+#    
 
 
     
