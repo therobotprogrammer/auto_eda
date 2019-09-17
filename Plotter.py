@@ -324,11 +324,28 @@ class Plotter:
         plotly.offline.plot(fig, show_link = True, filename = filename)        
     
 
-    def line_plot(self, df, x_columns , y_columns, color_columns, message = ''):
-        fig = px.line(df, x_columns, y_columns, color_columns)
+#    def line_plot(self, df, x_columns , y_columns, color_columns, message = ''):
+#        fig = px.line(df, x_columns, y_columns, color_columns)
+#        
+#        filename = os.path.join(self.current_directory, message + '_parallel_categories_plot.html')   
+#        plotly.offline.plot(fig, show_link = True, filename = filename)    
+
+
+    def line_plot(self, df, x, y, color = '', message = '' ):
         
-        filename = os.path.join(self.current_directory, message + '_parallel_categories_plot.html')   
+        df = df.sort_values(by = x)
+        if color == '':
+            fig = px.line(df, x=x, y=y, title = message)    
+        else:
+            fig = px.line(df, x=x, y=y, color=color, title = message)                
+
+        fig.update_xaxes(title = x.split('__')[-1])
+
+        filename = os.path.join(self.current_directory, message + '_line_plot.html')   
         plotly.offline.plot(fig, show_link = True, filename = filename)    
+            
+            
+
 
 
 if __name__ == '__main__':

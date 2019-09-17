@@ -76,116 +76,6 @@ global_debug_mode = True
 
 
 from funcy import join
-
-#
-#def parallise(df_input, function, partitions=None, processes=None):
-#    # calculate features in paralell by splitting the dataframe into partitions and using paralell processes
-#    if partitions == None:        
-#        partitions = global_cores        
-#    if processes == None:        
-#        processes = global_cores
-#       
-#    if global_debug_mode == True:
-#        compiled_result_serial = function(df_input)
-#        return compiled_result_serial
-#
-#    else:
-#            df_split = np.array_split(df_input, partitions, axis=1)  # split dataframe into partitions column wise
-#            
-#            
-#            with ProcessPoolExecutor(processes) as pool:     
-#                results_generator = pool.map(function, df_split)             
-#                results_as_splits = list(results_generator)
-#           
-#            compiled_result_parallel = [] 
-#            
-#            if isinstance(results_as_splits[0], tuple):                
-#                
-#                items_per_split =  len(results_as_splits[0])                      
-#                
-#                for index in range(0, items_per_split):
-#                    splits_to_concatenate = []
-#    
-#                    for split in results_as_splits:
-#                        
-#                        #If multiple values are returned, then they are a tuple. They have to be accessed as index. 
-#                        if isinstance(compiled_result_serial, pd.DataFrame) :
-#                            splits_to_concatenate.append(split[index].T) 
-#                         
-#                        else:
-#                            splits_to_concatenate.append(split[index])                            
-#                   
-#                    #concatenate based on datatype
-#                    if isinstance(splits_to_concatenate[0], pd.DataFrame):
-#                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1) 
-#                        compiled_result_parallel.append(joined_data_df)                        
-#                   
-#                    else:
-#                        joined_data = join(splits_to_concatenate)
-#                        compiled_result_parallel.append(joined_data)
-#                            
-#                compiled_result_parallel = tuple(compiled_result_parallel)
-# 
-#    
-#            else:
-#                    # If a tuple was not returned, then a was returned by each split
-#                    splits_to_concatenate = []
-#                    
-#                    for split in results_as_splits:
-#                            
-#                        splits_to_concatenate.append(split.T)                            
-#                   
-#                    #concatenate based on datatype
-#                    if isinstance(splits_to_concatenate[0], pd.DataFrame):
-#                        joined_data_df = pd.concat(splits_to_concatenate, axis = 1)      
-#
-#                        compiled_result_parallel.append(joined_data_df)                
-#                    else:
-#                        joined_data = join(splits_to_concatenate)
-#                        compiled_result_parallel.append(joined_data)
-#                        
-#                    #since original function returned only one item, 
-#                    #this function also returns only 1 item and not a tuple of items
-#                    
-#                    compiled_result_parallel = compiled_result_parallel[0]      
-#                    compiled_result_parallel = compiled_result_parallel.T
-#    
-#            if global_verify_parallel_execution == True:
-#                compiled_result_serial = function(df_input)
-#                
-#                if isinstance(compiled_result_serial, tuple):
-#                    for index, serial_item in enumerate(compiled_result_serial) :
-#                        if isinstance(serial_item, pd.DataFrame) :
-#                            parallel_item = compiled_result_parallel[index]
-#                            assert serial_item.equals(parallel_item), 'Serial and Parallel compution do not match'
-#                        
-#                        else:
-#                            assert serial_item == compiled_result_parallel[index] , 'Serial and Parallel compution do not match'
-#                            
-#                else:
-#                        if isinstance(compiled_result_serial, pd.DataFrame) :
-#                            assert compiled_result_serial.equals( compiled_result_parallel ), 'Serial and Parallel compution do not match'
-#                        
-#                        else:
-#                            assert compiled_result_serial == compiled_result_parallel , 'Serial and Parallel compution do not match'                     
-#    
-#    return compiled_result_parallel
-#
-
-
-
-
-
-
-
-
-
-#from sklearn import datasets
-## Load data and select first column
-#data_set = datasets.load_breast_cancer()
-#y=data_set.data[:,0]
-
-
 import pandas as pd
 import numpy as np
 import scipy
@@ -196,22 +86,31 @@ from scipy.stats._continuous_distns import _distn_names
 
 
 
-# Create an index array (x) for data
 
+#class AutoFindDist:
+#    def __init__(self):
+#        
+#
+#    def fit(self, y):
+#        
+#        
+#    def get_k_best_transformers(self, y):
+#        
+#        
+#     
+#    
+    
+    
+    
+# Create an index array (x) for data
 x = np.arange(len(y))
 size = len(y)
-
-
-
-
 
 plt.hist(y)
 plt.show()
 
-
 y_df = pd.DataFrame(y, columns=['Data'])
 y_df.describe()
-
 
 
 sc=StandardScaler() 
@@ -239,108 +138,7 @@ warnings.filterwarnings("ignore")
 
 long_version = [
                     'levy_stable',
-
-                ]
-                
-                
-#                
-#dist_names = [  'alpha',
-#                'anglit',
-#                'arcsine',
-#                'argus',
-#                'beta',
-#                'betaprime',
-#                'bradford',
-#                'burr',
-#                'burr12',
-#                'cauchy',
-#                'chi',
-#                'chi2',
-#                'cosine',
-#                'crystalball',
-#                'dgamma',
-#                'dweibull',
-#                'erlang',
-#                'expon',
-#                'exponnorm',
-#                'exponweib',
-#                'exponpow',
-#                'f',
-#                'fatiguelife',
-#                'fisk',
-#                'foldcauchy',
-#                'foldnorm',
-#                'frechet_r',
-#                'frechet_l',
-#                'genlogistic',
-#                'gennorm',
-#                'genpareto',
-#                'genexpon',
-#                'genextreme',
-#                'gausshyper',
-#                'gamma',
-#                'gengamma',
-#                'genhalflogistic',
-#                'gilbrat',
-#                'gompertz',
-#                'gumbel_r',
-#                'gumbel_l',
-#                'halfcauchy',
-#                'halflogistic',
-#                'halfnorm',
-#                'halfgennorm',
-#                'hypsecant',
-#                'invgamma',
-#                'invgauss',
-#                'invweibull',
-#                'johnsonsb',
-#                'johnsonsu',
-#                'kappa4',
-#                'kappa3',
-#                'ksone',
-#                'kstwobign',
-#                'laplace',
-#                'levy',
-#                'levy_l',
-#                'logistic',
-#                'loggamma',
-#                'loglaplace',
-#                'lognorm',
-#                'lomax',
-#                'maxwell',
-#                'mielke',
-#                'moyal',
-#                'nakagami',
-#                'ncx2',
-#                'ncf',
-#                'nct',
-#                'norm',
-#                'norminvgauss',
-#                'pareto',
-#                'pearson3',
-#                'powerlaw',
-#                'powerlognorm',
-#                'powernorm',
-#                'rdist',
-#                'reciprocal',
-#                'rayleigh',
-#                'rice',
-#                'recipinvgauss',
-#                'semicircular',
-#                'skewnorm',
-#                't',
-#                'trapz',
-#                'triang',
-#                'truncexpon',
-#                'truncnorm',
-#                'tukeylambda',
-#                'uniform',
-#                'vonmises',
-#                'vonmises_line',
-#                'wald',
-#                'weibull_min',
-#                'weibull_max',
-#                'wrapcauchy']
+               ]
 
 
 
@@ -397,6 +195,8 @@ def get_chi_square_and_ks_test(all_distributions_df):
     x = (x + np.roll(x, -1))[:-1] / 2.0
 
     results = pd.DataFrame()
+    
+    parameters = {}
 
     for idx, distribution in enumerate(all_distributions_df.columns):
 #        print('>>>>' + distribution)
@@ -437,6 +237,10 @@ def get_chi_square_and_ks_test(all_distributions_df):
         results.loc[distribution, 'p_value'] = p
         
         
+        parameters[distribution] = param
+
+        
+        
         
         
         #other code
@@ -468,7 +272,7 @@ def get_chi_square_and_ks_test(all_distributions_df):
         print(distribution)
 
         
-    return results
+    return results, parameters
         
         
 
@@ -479,7 +283,7 @@ from ParallelCPU import ParallelCPU
 #results = parallise(all_distributions_df, function = get_chi_square_and_ks_test)
 
 parallel = ParallelCPU(debug_mode = False)
-results = parallel.compute(all_distributions_df, function = get_chi_square_and_ks_test)
+results, parameters = parallel.compute(all_distributions_df, function = get_chi_square_and_ks_test)
 
 # Report results
 
@@ -509,10 +313,10 @@ plt.show()
 
 # Get the top three distributions from the previous phase
 number_distributions_to_plot = 10
-dist_names = results['Distribution'].iloc[0:number_distributions_to_plot]
+top_k_dist_names = results['Distribution'].iloc[0:number_distributions_to_plot]
 
 # Create an empty list to stroe fitted distribution parameters
-parameters = []
+top_k_parameters = []
 
 # Loop through the distributions ot get line fit and paraemters
 
@@ -526,11 +330,12 @@ parameters = []
 
 
 
-for idx, dist_name in enumerate(dist_names):
+for idx, dist_name in enumerate(top_k_dist_names):
     # Set up distribution and store distribution paraemters
     dist = getattr(scipy.stats, dist_name)
-    param = dist.fit(y_std)
-    parameters.append(param)
+#    param = dist.fit(y_std)
+    param = parameters[dist_name]
+    top_k_parameters.append(param)
     
 
     plt.figure()
@@ -571,7 +376,7 @@ for idx, dist_name in enumerate(dist_names):
 dist_parameters = pd.DataFrame()
 dist_parameters['Distribution'] = (
         results['Distribution'].iloc[0:number_distributions_to_plot])
-dist_parameters['Distribution parameters'] = parameters
+dist_parameters['Distribution parameters'] = top_k_parameters
 
 # Print parameter results
 print ('\nDistribution parameters:')
@@ -594,7 +399,7 @@ data.sort()
 
 # Loop through selected distributions (as previously selected)
 
-for distribution in dist_names:
+for distribution in top_k_dist_names:
     # Set up distribution
     dist = getattr(scipy.stats, distribution)
     param = dist.fit(y_std)
@@ -644,9 +449,41 @@ for distribution in dist_names:
     # Display plot    
     plt.tight_layout(pad=4)
     plt.show()
+
+
+
+k_best_distributions = results.sort_values(by= 'p_value', axis=0, ascending = False).iloc[0:3,]
+k_best_distributions = k_best_distributions.index.values.tolist()
+
+
+k_best_target_transformers = []
+
+for distribution in k_best_distributions:
+        
+    dist = getattr(scipy.stats, distribution)
     
     
+    k_best_target_transformers.append(dist)
     
-    
-    
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

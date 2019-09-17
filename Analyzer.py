@@ -28,7 +28,7 @@ import math
 
 
 class Analyzer:
-    def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False, use_precomputed_results = True, compact_plots = True):        
+    def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False, use_precomputed_results = True, compact_plots = True, use_dask = False, prefix_for_parameters = ''):        
         self.config = None
         self.pipeline = None
         self.lower_is_better = False  
@@ -37,14 +37,15 @@ class Analyzer:
         self.message = message
         self.use_precomputed_results = use_precomputed_results
         self.compact_plots = compact_plots
+        self.use_dask = use_dask
+        self.prefix_for_parameters = prefix_for_parameters
         
         if use_precomputed_results == True:
             assert(database is not None)
         
         
         database_top_directory = database.save_directory
-        database_sub_directory = os.path.join(database_top_directory, 'Analyzer', message)
-        
+        database_sub_directory = os.path.join(database_top_directory, 'Analyzer', message)        
         self.database = SaveAndLoad(database_sub_directory)
 
         if plot_dir == '':            
@@ -65,7 +66,7 @@ class Analyzer:
                     
                     
     def gererate_params(self, config_dict):        
-        generated_params = self.__dp(config_dict)
+        generated_params = self.__dp(config_dict, self.prefix_for_parameters)
         return generated_params
     
 
@@ -228,18 +229,30 @@ class Analyzer:
                 
                 self.grid_search_estimator = GridSearchCV(self.pipeline, reduced_grid_search_params_copy, **self.grid_search_arguments)    
                 
-
-                
-                
                 t1 = time.time()
-                self.grid_search_estimator.fit(X, y)
+                    
+                if self.use_dask:
+                    import dask_ml.joblib  
+                    from sklearn.utils import parallel_backend
+                    #using dask to avoid memory leak errors in gridsearchcv. this also allows 
+                    #better scheduling of nested parallel calls without over-subscription and 
+                    #potentially distribute parallel calls over a networked cluster of several hosts.
+                    
+
+                    with parallel_backend('dask'):
+    #                    search.fit(digits.data, digits.target)
+                        self.grid_search_estimator.fit(X, y)
+                 
+                else:
+                        self.grid_search_estimator.fit(X, y)
+                    
                 t2 = time.time()         
                 self.processing_time_ = t2-t1   
                 
                 self.cv_results = self.grid_search_estimator.cv_results_    
-                self.processed_results_dict = self.process_results(self.cv_results, self.pipeline)
+                processed_results_dict = self.process_results(self.cv_results, self.pipeline)
                 
-                self.update_precomputed_result_archive(X, y, reduced_grid_search_params, self.processed_results_dict)        
+                self.update_precomputed_result_archive(X, y, reduced_grid_search_params, processed_results_dict)        
                 
                 p2 = reduced_grid_search_params[0]['multiregressor__estimator']
                 p2 = str(p2)                
@@ -247,13 +260,13 @@ class Analyzer:
                 p3 = reduced_grid_search_params_copy[0]['multiregressor__estimator']
                 p3 = str(p3)                     
                 
-#                #to do: merge here
-#                self.processed_results_dict = matching_precomputed_result['processed_results_dict']
-#
-#
-#                #load back precomputed data
-#                for key, df in self.processed_results_dict.items():
-#                    df = df.append(self.matching_precomputed_result['processed_results_dict'][key], ignore_index=True)     
+                #to do: merge here
+                self.processed_results_dict = matching_precomputed_result['processed_results_dict']
+
+
+                #load back precomputed data
+                for key, df in self.processed_results_dict.items():
+                    df = df.append(matching_precomputed_result['processed_results_dict'][key], ignore_index=True)     
 
 
         else:
@@ -311,7 +324,9 @@ class Analyzer:
 
         
     def make_plots(self):
-            self.processed_results_dict = self.__remove_variance(self.processed_results_dict, self.compact_plots)        
+            self.processed_results_dict = self.__remove_variance(self.processed_results_dict, self.compact_plots)   
+            self.processed_results_dict = self.__order_wrt_pipeline(self.processed_results_dict, pipeline)       
+
 
             self.scoring = self.grid_search_arguments['scoring']
             
@@ -615,12 +630,9 @@ class Analyzer:
             
             traces = []
 
-            
-            
-
             for non_numeric_column in columns_with_no_numeric_values:
 
-                if len(columns_with_no_numeric_values) == 0:
+                if len(columns_with_no_numeric_values) > 0:
                     unique_groups_in_non_numeric_column = list(df.groupby(columns_with_no_numeric_values[0]).groups.keys())
                     
                     for group in unique_groups_in_non_numeric_column:
@@ -668,13 +680,16 @@ class Analyzer:
                         plotly.offline.plot(fig, show_link = True, filename = filename)   
                     
                     
-
-            
+            temp_df = df.dropna()                    
+            x = temp_df[columns_with_numeric_values[0]] 
+            y = temp_df[columns_with_numeric_values[1]]
+            z = temp_df[metric_to_plot]   
+        
             if len(columns_with_no_numeric_values) == 0:
-                temp_df = df.dropna()
-                x = temp_df[columns_with_numeric_values[0]] 
-                y = temp_df[columns_with_numeric_values[1]]
-                z = temp_df[metric_to_plot]     
+#                temp_df = df.dropna()
+#                x = temp_df[columns_with_numeric_values[0]] 
+#                y = temp_df[columns_with_numeric_values[1]]
+#                z = temp_df[metric_to_plot]     
         
             
                 trace = go.Mesh3d(x=x,y=y,z=z,
@@ -711,15 +726,20 @@ class Analyzer:
         else:
             for column_name in columns_with_numeric_values:    
                 if len(columns_with_no_numeric_values) == 0:
-                    df = df.sort_values(by = column_name)
-                    fig = px.line(df, x=column_name, y=metric_to_plot, title = title)                
-                    fig.update_xaxes(title = column_name.split('__')[-1])
-                    fig.show()
+#                    df = df.sort_values(by = column_name)
+#                    fig = px.line(df, x=column_name, y=metric_to_plot, title = title)                
+#                    fig.update_xaxes(title = column_name.split('__')[-1])
+#                    fig.show()
+                    self.plotter.line_plot(df, x = column_name, y = metric_to_plot, message = title )
                 else: 
-                    df = df.sort_values(by = column_name)
-                    fig = px.line(df, x=column_name, y=metric_to_plot, color=columns_with_no_numeric_values[0], title = title)                
-                    fig.update_xaxes(title = column_name.split('__')[-1])
-                    fig.show()
+#                    df = df.sort_values(by = column_name)
+#                    fig = px.line(df, x=column_name, y=metric_to_plot, color=columns_with_no_numeric_values[0], title = title)                
+#                    fig.update_xaxes(title = column_name.split('__')[-1])
+#                    fig.show()
+                    self.plotter.line_plot(df, x = column_name, y = metric_to_plot, color = columns_with_no_numeric_values[0], message = title )
+
+
+
 
 
 
@@ -766,6 +786,13 @@ if __name__ == '__main__':
     from sklearn.preprocessing import StandardScaler
     from sklearn.ensemble import AdaBoostRegressor
     from sklearn.neighbors import KNeighborsRegressor
+    from sklearn.decomposition import PCA
+    
+    
+    from MultiWrappers import MultiTransformedTargetRegressor
+    from sklearn.preprocessing import PowerTransformer
+    from sklearn.preprocessing import QuantileTransformer
+    from sklearn.compose import TransformedTargetRegressor
 
 
     global_random_seed = 0
@@ -811,7 +838,7 @@ if __name__ == '__main__':
     
     
 #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
-    memory = '/media/pt/nvme/sklearn_memory/memory'
+    memory = '/media/pt/hdd/from NVME/sklearn_memory/memory'
 
 
 
@@ -836,7 +863,7 @@ if __name__ == '__main__':
     
     bayesianRidge_params =          {
 #                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
-                                        'n_iter' : [3,5,1,2]
+                                        'n_iter' : [3,5]
                                     }
     
     
@@ -915,12 +942,12 @@ if __name__ == '__main__':
     steps = [
                 ('multitf' , MultiTf() ), 
                 ('scaler' , StandardScaler() ),
+                ('pca', PCA(n_components = .999)),
 #                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
                 ('multiregressor' , MultiRegressor() ) 
             ]
         
-    pipeline = Pipeline( memory = memory, steps = steps)
-    
+    pipeline = Pipeline( memory = memory, steps = steps)    
     
     
 
@@ -928,32 +955,90 @@ if __name__ == '__main__':
     
     
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
+    plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
 
-    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = True)
-    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', verbose = 1)
+    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
+    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', pre_dispatch='2*n_jobs', verbose = 1)
     
-#    auto_imputer = database.load('auto_imputer_sep_08')
-    
-#    auto_imputer.make_plots()
+    y_train_transformed = np.log1p(y_train)
+    y_train_transformed.hist()
+    auto_imputer.fit(joint_df, y_train_transformed)    
+
+
+
 
 #
-#    auto_imputer = Analyzer(message = 'Imputer Analysis', database = database, debug_mode = False, show_plots = False)
-#    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', verbose = 1)    
-    auto_imputer.fit(joint_df, y_train)    
-    
-#    auto_imputer_sep_08 = auto_imputer
-#    database.save(auto_imputer_sep_08)
 #    
+#    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
+#    plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
+#
+#    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
+#    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', pre_dispatch='2*n_jobs', verbose = 1)
+#
+#    transformer = PowerTransformer(method='box-cox', standardize=False, copy=True)
+#    y_train_np = y_train.values
+#    y_train_np = y_train_np.reshape(-1,1)
+#    transformer.fit(y_train_np)
+#    y_train_transformed = transformer.transform(y_train.values.reshape(-1,1))
+#  
+#    t = pd.DataFrame(y_train_transformed)
+#    t.hist()
+#    
+#    auto_imputer.fit(joint_df, y_train_transformed)    
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+#
+#
+#
+#    steps = [
+#                ('multitf' , MultiTf() ), 
+#                ('scaler' , StandardScaler() ),
+#                ('pca', PCA(n_components = .999)),
+##                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
+#                ('multiregressor' , MultiRegressor() ) 
+#            ]
+#        
+#    pipeline = Pipeline( memory = memory, steps = steps)    
+#    
+#    
+#
+#    from MultiWrappers import MultiTransformedTargetRegressor
+#    from sklearn.preprocessing import PowerTransformer
+#    from sklearn.preprocessing import QuantileTransformer
+#    from sklearn.compose import TransformedTargetRegressor
+#    
+#    
+#    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
+#    plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
+#
+#    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = 'regressor')
+#    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', pre_dispatch='2*n_jobs', verbose = 1)
+#    
+#    params = auto_imputer.grid_search_params    
+##    transformer_parameters = {'transformer': [PowerTransformer]}    
+##    params.append(transformer_parameters)
+#
+#    transformer = PowerTransformer(method='yeo-johnson', standardize=False, copy=True)
+#
+#    target_regressor = TransformedTargetRegressor(regressor=pipeline, transformer = transformer)
+#    
+#    target_regressor_cv = GridSearchCV(target_regressor, params, cv=5)
+#    target_regressor_cv.fit(joint_df, y_train)
+#    
     
     
-    
-
-
-    
-
-
 
 
 
