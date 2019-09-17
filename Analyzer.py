@@ -183,7 +183,12 @@ class Analyzer:
                     matching_precomputed_result['processed_results_dict'] = matching_pre_computed_processed_results_dict
                     
                     return matching_precomputed_result, reduced_grid_search_params
-                    
+                
+            if self.precomputed_result_found == False:
+                reduced_grid_search_params = self.grid_search_params
+                matching_precomputed_result = None
+                return matching_precomputed_result, reduced_grid_search_params
+                 
         else:
              return matching_precomputed_result, self.grid_search_params
 
@@ -232,7 +237,7 @@ class Analyzer:
                 t1 = time.time()
                     
                 if self.use_dask:
-                    import dask_ml.joblib  
+#                    import dask_ml.joblib  
                     from sklearn.utils import parallel_backend
                     #using dask to avoid memory leak errors in gridsearchcv. this also allows 
                     #better scheduling of nested parallel calls without over-subscription and 
@@ -260,13 +265,15 @@ class Analyzer:
                 p3 = reduced_grid_search_params_copy[0]['multiregressor__estimator']
                 p3 = str(p3)                     
                 
-                #to do: merge here
-                self.processed_results_dict = matching_precomputed_result['processed_results_dict']
-
-
-                #load back precomputed data
-                for key, df in self.processed_results_dict.items():
-                    df = df.append(matching_precomputed_result['processed_results_dict'][key], ignore_index=True)     
+                
+                if matching_precomputed_result is not None:
+                    #to do: merge here
+                    self.processed_results_dict = matching_precomputed_result['processed_results_dict']
+    
+    
+                    #load back precomputed data
+                    for key, df in self.processed_results_dict.items():
+                        df = df.append(matching_precomputed_result['processed_results_dict'][key], ignore_index=True)     
 
 
         else:
@@ -947,17 +954,16 @@ if __name__ == '__main__':
                 ('multiregressor' , MultiRegressor() ) 
             ]
         
+    #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
+    memory = '/media/pt/hdd/from NVME/sklearn_memory/memory'
     pipeline = Pipeline( memory = memory, steps = steps)    
     
-    
 
-
-    
     
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
     plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
 
-    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
+    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = True, use_dask = False, prefix_for_parameters = '')
     auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', pre_dispatch='2*n_jobs', verbose = 1)
     
     y_train_transformed = np.log1p(y_train)
