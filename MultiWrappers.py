@@ -79,7 +79,7 @@ class MultiRegressor(BaseEstimator, RegressorMixin):
 class MultiRegressorWithTargetTransformation(BaseEstimator, RegressorMixin):  
     """An example of classifier"""
 
-    def __init__(self, regressor = None, transformer=None, func=None, inverse_func=None, check_inverse=True):
+    def __init__(self, regressor = None, transformer=None, func_inverse_func_pair = None, check_inverse=True):
     
         """
         Called when initializing the classifier
@@ -87,9 +87,9 @@ class MultiRegressorWithTargetTransformation(BaseEstimator, RegressorMixin):
         self.regressor = regressor
         
         self.transformer = transformer
-        self.func=None
-        self.inverse_func=None
+        self.func_inverse_func_pair = func_inverse_func_pair
         self.check_inverse=True
+        
         
 #        if transformer is None:
 #            print('Transformer is None')
@@ -163,7 +163,8 @@ class MultiRegressorWithTargetTransformation(BaseEstimator, RegressorMixin):
 #        else:
 #            print('y is complete')
         
-
+        self.func = self.func_inverse_func_pair[0]
+        self.inverse_func= self.func_inverse_func_pair[1]
         
         """Fit the model according to the given training data.
         Parameters

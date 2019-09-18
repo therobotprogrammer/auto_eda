@@ -924,8 +924,8 @@ if __name__ == '__main__':
     
     MultiRegressorWithTargetTransformation_params =        {   
                                         'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
-                                        'func' : [np.log],
-                                        'inverse_func' : [np.exp]
+                                        'func_inverse_func_pair' : [(np.log, np.exp)],
+#                                        'inverse_func' : [np.exp]
 #                                        'transformer' : [power_transformer_dict]
                                     }
    
