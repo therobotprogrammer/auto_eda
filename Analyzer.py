@@ -276,11 +276,13 @@ class Analyzer:
                         df = df.append(matching_precomputed_result['processed_results_dict'][key], ignore_index=True)     
 
 
+
+
         else:
             self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **self.grid_search_arguments)        
 
             t1 = time.time()
-            self.grid_search_estimator.fit(X, y)
+            self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())
             t2 = time.time()         
             self.processing_time_ = t2-t1   
             
@@ -768,7 +770,7 @@ if __name__ == '__main__':
 
     import sys
     sys.path.insert(0, '/home/pt/Documents/auto_eda')   
-    from MultiWrappers import MultiTf, MultiRegressor
+    from MultiWrappers import MultiTf, MultiRegressor, MultiRegressorWithTargetTransformation, MultiTransformedTargetRegressor
     from SaveAndLoad import SaveAndLoad
     from sklearn.model_selection import GridSearchCV
     from xgboost.sklearn import XGBRegressor
@@ -796,7 +798,7 @@ if __name__ == '__main__':
     from sklearn.decomposition import PCA
     
     
-    from MultiWrappers import MultiTransformedTargetRegressor
+#    from MultiWrappers import MultiTransformedTargetRegressor
     from sklearn.preprocessing import PowerTransformer
     from sklearn.preprocessing import QuantileTransformer
     from sklearn.compose import TransformedTargetRegressor
@@ -869,16 +871,16 @@ if __name__ == '__main__':
     
     
     bayesianRidge_params =          {
-#                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
-                                        'n_iter' : [3,5]
+                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
+#                                        'n_iter' : [3,5]
                                     }
     
     
     estimator_list =                [   
                                         {BayesianRidge() : bayesianRidge_params},
-#                                        DecisionTreeRegressor(),
-#                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
-#                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
+                                        DecisionTreeRegressor(),
+                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                                     ]
     
     
@@ -909,9 +911,27 @@ if __name__ == '__main__':
                                     }
     
     
-    multi_regressor_params =        {   
-                                        'estimator' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ]
+    power_transformer_params =      {
+                                        'method' : ['yeo-johnson', 'box-cox'],
+                                        'standardize' : [False],
+                                        'copy' : [False]
                                     }
+    
+    
+    power_transformer_dict =        {
+                                        PowerTransformer() : power_transformer_params
+                                    }
+    
+    MultiRegressorWithTargetTransformation_params =        {   
+                                        'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
+                                        'func' : [np.log],
+                                        'inverse_func' : [np.exp]
+#                                        'transformer' : [power_transformer_dict]
+                                    }
+   
+#    MultiTransformedTargetRegressor_params =        {   
+#                                        'transformer' : [PowerTransformer()]
+#                                    }
     
 #    multi_regressor_params =        {   
 #                                        'estimator' : [XGBRegressor() ]
@@ -939,10 +959,10 @@ if __name__ == '__main__':
     config_dict =                   {   
                                         'multitf' : multitf_params,
 #                                        'multiselector' : multi_selector_params, 
-                                        'multiregressor' : multi_regressor_params                                        
+                                        'MultiRegressorWithTargetTransformation' : MultiRegressorWithTargetTransformation_params                                        
                                     }    
         
-    clf = LinearRegression()
+#    clf = LinearRegression()
 #    clf2 = SVR(kernel="linear")
 #    selector = RFE(estimator, 5, step=1)
 
@@ -951,7 +971,7 @@ if __name__ == '__main__':
                 ('scaler' , StandardScaler() ),
                 ('pca', PCA(n_components = .999)),
 #                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
-                ('multiregressor' , MultiRegressor() ) 
+                ('MultiRegressorWithTargetTransformation' , MultiRegressorWithTargetTransformation() ) 
             ]
         
     #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
@@ -966,15 +986,21 @@ if __name__ == '__main__':
     auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = True, use_dask = False, prefix_for_parameters = '')
     auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', pre_dispatch='2*n_jobs', verbose = 1)
     
-    y_train_transformed = np.log1p(y_train)
-    y_train_transformed.hist()
-    auto_imputer.fit(joint_df, y_train_transformed)    
+    
+    
+#    y_train_transformed = np.log1p(y_train)
+#    y_train_transformed.hist()
+#    auto_imputer.fit(joint_df, y_train_transformed)    
+
+
+    auto_imputer.fit(joint_df, y_train)  
+    
 
 
 
 
-#
-#    
+
+    
 #    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
 #    plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
 #
@@ -991,8 +1017,8 @@ if __name__ == '__main__':
 #    t.hist()
 #    
 #    auto_imputer.fit(joint_df, y_train_transformed)    
-
-
+#
+#
 
 
 
@@ -1007,13 +1033,17 @@ if __name__ == '__main__':
 
 #
 #
-#
+#    config_dict =                   {   
+#                                        'multitf' : multitf_params,
+##                                        'multiselector' : multi_selector_params, 
+#                                        'MultiTransformedTargetRegressor' : MultiTransformedTargetRegressor_params                                        
+#                                    }    
 #    steps = [
 #                ('multitf' , MultiTf() ), 
 #                ('scaler' , StandardScaler() ),
 #                ('pca', PCA(n_components = .999)),
 ##                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
-#                ('multiregressor' , MultiRegressor() ) 
+#                ('MultiTransformedTargetRegressor' , MultiTransformedTargetRegressor() ) 
 #            ]
 #        
 #    pipeline = Pipeline( memory = memory, steps = steps)    
@@ -1043,8 +1073,8 @@ if __name__ == '__main__':
 #    target_regressor_cv = GridSearchCV(target_regressor, params, cv=5)
 #    target_regressor_cv.fit(joint_df, y_train)
 #    
-    
-    
+#    
+#    
 
 
 
