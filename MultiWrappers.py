@@ -21,6 +21,7 @@ import pandas as pd
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.experimental import enable_iterative_imputer  # noqa
 from sklearn.impute import IterativeImputer
+from sklearn.utils.validation import FLOAT_DTYPES, check_is_fitted
 
 
 
@@ -54,8 +55,7 @@ class MultiTf(BaseEstimator, TransformerMixin):
         
         return self
        
-    def fit_transform(self, X, y=None):
-#        print('transformer is: ', type(self.transformer).__name__)
+    def fit_transform(self, X, y=None):       
         return self.transformer.fit_transform(X, y=None)
         
     def transform(self, X):      

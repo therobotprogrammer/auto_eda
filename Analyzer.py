@@ -25,6 +25,8 @@ import copy
 from deep_eq import deep_eq
 import math
 
+from dask_ml.wrappers import ParallelPostFit
+
 from dask_ml.model_selection import GridSearchCV
 #from sklearn.model_selection import GridSearchCV
 
@@ -887,9 +889,9 @@ if __name__ == '__main__':
     
     estimator_list =                [   
                                         {BayesianRidge() : bayesianRidge_params},
-                                        DecisionTreeRegressor(),
-                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
-                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
+#                                        DecisionTreeRegressor(),
+#                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+#                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                                     ]
     
     
@@ -916,8 +918,8 @@ if __name__ == '__main__':
     
     
     multitf_params =                {
-                                        'transformer' : [iterative_imputer_dict]
-#                                        'transformer' : [iterative_imputer_dict, simple_imputer_dict]
+#                                        'transformer' : [iterative_imputer_dict]
+                                        'transformer' : [iterative_imputer_dict, simple_imputer_dict]
                                         
                                     }
     
@@ -942,6 +944,8 @@ if __name__ == '__main__':
 
     MultiRegressorWithTargetTransformation_params = {   
                                                         'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
+#                                                        'regressor' : [AdaBoostRegressor(), KNeighborsRegressor() ],
+    
                 #                                        'func_inverse_func_pair' : [(np.log, np.exp), (np.log1p, np.expm1)],
                 #                                        'inverse_func' : [np.exp]
                                                         'transformer' : [target_transformer_log_exp, target_transformer_log1p_expm1]
@@ -978,29 +982,35 @@ if __name__ == '__main__':
                                     }        
     
 
+    dasktf_params = {
+                        'estimator' : [simple_imputer_dict, iterative_imputer_dict]
+                    }
     
-    config_dict_1 =                   {   
-                                        'multitf' : multitf_params,
-                                        'multiregressor' : multi_regressor_params                                        
-                                    }    
-    
-    
-    config_dict_2 =                   {   
-                                        'multitf' : multitf_params,
-#                                        'selectfrommodel' :selectfrommodel_params,
-                                        'multiregressor' : multi_regressor_params                                        
-                                    }  
-
+#    config_dict_1 =                   {   
+#                                        'multitf' : multitf_params,
+#                                        'multiregressor' : multi_regressor_params                                        
+#                                    }    
+#    
+#    
+#    config_dict_2 =                   {   
+#                                        'multitf' : multitf_params,
+##                                        'selectfrommodel' :selectfrommodel_params,
+#                                        'multiregressor' : multi_regressor_params                                        
+#                                    }  
+#
     config_dict_3 =                   {   
                                     'multitf' : multitf_params,
                                     'MultiRegressorWithTargetTransformation' : MultiRegressorWithTargetTransformation_params                                        
                                 } 
         
-
+    config_dict_4 =                   {   
+                                    'dasktf' : dasktf_params,
+                                    'MultiRegressorWithTargetTransformation' : MultiRegressorWithTargetTransformation_params                                        
+                                } 
   
 
 
-    config_dict = config_dict_3
+    config_dict = config_dict_4
     
     
 #    steps =     [
@@ -1019,7 +1029,15 @@ if __name__ == '__main__':
                 ('MultiRegressorWithTargetTransformation' , MultiRegressorWithTargetTransformation() ) 
             ]
     
-    steps = steps_3
+    
+    steps_4 = [
+            ('dasktf' , ParallelPostFit() ), 
+            ('scaler' , StandardScaler() ),
+            ('pca', PCA(n_components = .999)),
+            ('MultiRegressorWithTargetTransformation' , MultiRegressorWithTargetTransformation() ) 
+        ]
+    
+    steps = steps_4
         
     #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
     memory = '/media/pt/hdd/from NVME/dask_memory/memory'
@@ -1031,9 +1049,13 @@ if __name__ == '__main__':
 
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
     plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
+    
+    from distributed import Client
+    client = Client()
+    
 
     auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
-    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', scheduler='processes', refit = False)
+    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', scheduler=client, refit = False, cache_cv = True)
 #    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', refit = False)
 
 #    p = auto_imputer.grid_search_params
