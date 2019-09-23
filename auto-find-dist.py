@@ -456,17 +456,17 @@ k_best_distributions = results.sort_values(by= 'p_value', axis=0, ascending = Fa
 k_best_distributions = k_best_distributions.index.values.tolist()
 
 
+
+
 k_best_target_transformers = []
 
 for distribution in k_best_distributions:
         
     dist = getattr(scipy.stats, distribution)
+
     
     
     k_best_target_transformers.append(dist)
-    
-
-
 
 
 

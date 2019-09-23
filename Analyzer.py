@@ -25,7 +25,8 @@ import copy
 from deep_eq import deep_eq
 import math
 
-
+from dask_ml.model_selection import GridSearchCV
+#from sklearn.model_selection import GridSearchCV
 
 class Analyzer:
     def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False, use_precomputed_results = True, compact_plots = True, use_dask = False, prefix_for_parameters = ''):        
@@ -61,7 +62,9 @@ class Analyzer:
         self.cv_results = None
         self.grid_search_estimator = None
         self.processed_results_dict = None
-
+        
+        
+                
 
                     
                     
@@ -216,11 +219,17 @@ class Analyzer:
     
     
 
-    def fit(self, X, y):              
+    def fit(self, X, y):       
+
+
+            
         #to do: remove this
         if self.use_precomputed_results:
             matching_precomputed_result, reduced_grid_search_params = self.load_precomputed_results(X,y)
             
+#            X = X.to_numpy()
+#            y = y.to_numpy()
+#            
             if reduced_grid_search_params == []:
                 #all parameters found in archive
                 self.processed_results_dict = matching_precomputed_result['processed_results_dict']
@@ -236,20 +245,9 @@ class Analyzer:
                 
                 t1 = time.time()
                     
-                if self.use_dask:
-#                    import dask_ml.joblib  
-                    from sklearn.utils import parallel_backend
-                    #using dask to avoid memory leak errors in gridsearchcv. this also allows 
-                    #better scheduling of nested parallel calls without over-subscription and 
-                    #potentially distribute parallel calls over a networked cluster of several hosts.
-                    
 
-                    with parallel_backend('dask'):
-    #                    search.fit(digits.data, digits.target)
-                        self.grid_search_estimator.fit(X, y)
-                 
-                else:
-                        self.grid_search_estimator.fit(X, y)
+                self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())                    
+
                     
                 t2 = time.time()         
                 self.processing_time_ = t2-t1   
@@ -282,7 +280,9 @@ class Analyzer:
             self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **self.grid_search_arguments)        
 
             t1 = time.time()
-            self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())
+#            self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())
+            self.grid_search_estimator.fit(X, y)
+            
             t2 = time.time()         
             self.processing_time_ = t2-t1   
             
@@ -423,8 +423,16 @@ class Analyzer:
                 cell_value = df_local.iloc[row_idx, column_idx]
                 if not (isinstance(cell_value, str) or isinstance(cell_value, numbers.Number) ):
                     try:
-                        df_local.iloc[row_idx, column_idx] = type(cell_value).__name__
-                        function_locations_mask.iloc[row_idx, column_idx] = True                        
+                        class_name = type(cell_value).__name__
+                        
+                        if class_name == 'NamedFunctionTransformer':
+                            df_local.iloc[row_idx, column_idx] = cell_value._name
+                            function_locations_mask.iloc[row_idx, column_idx] = True                        
+                            
+                        
+                        else:                            
+                            df_local.iloc[row_idx, column_idx] = type(cell_value).__name__
+                            function_locations_mask.iloc[row_idx, column_idx] = True                        
                     except:
                         df_local.iloc[row_idx, column_idx] = str(cell_value)
                         
@@ -770,9 +778,8 @@ if __name__ == '__main__':
 
     import sys
     sys.path.insert(0, '/home/pt/Documents/auto_eda')   
-    from MultiWrappers import MultiTf, MultiRegressor, MultiRegressorWithTargetTransformation, MultiTransformedTargetRegressor
+    from MultiWrappers import MultiTf, MultiRegressor, MultiRegressorWithTargetTransformation, MultiTransformedTargetRegressor, NamedFunctionTransformer
     from SaveAndLoad import SaveAndLoad
-    from sklearn.model_selection import GridSearchCV
     from xgboost.sklearn import XGBRegressor
 
     from sklearn.experimental import enable_iterative_imputer  # noqa
@@ -802,6 +809,8 @@ if __name__ == '__main__':
     from sklearn.preprocessing import PowerTransformer
     from sklearn.preprocessing import QuantileTransformer
     from sklearn.compose import TransformedTargetRegressor
+    from sklearn.svm import LinearSVC
+    from sklearn.linear_model import LogisticRegression
 
 
     global_random_seed = 0
@@ -871,8 +880,8 @@ if __name__ == '__main__':
     
     
     bayesianRidge_params =          {
-                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
-#                                        'n_iter' : [3,5]
+#                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
+                                        'n_iter' : [24]
                                     }
     
     
@@ -907,7 +916,9 @@ if __name__ == '__main__':
     
     
     multitf_params =                {
-                                        'transformer' : [iterative_imputer_dict, simple_imputer_dict]
+                                        'transformer' : [iterative_imputer_dict]
+#                                        'transformer' : [iterative_imputer_dict, simple_imputer_dict]
+                                        
                                     }
     
     
@@ -922,12 +933,19 @@ if __name__ == '__main__':
                                         PowerTransformer() : power_transformer_params
                                     }
     
-    MultiRegressorWithTargetTransformation_params =        {   
-                                        'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
-                                        'func_inverse_func_pair' : [(np.log, np.exp)],
-#                                        'inverse_func' : [np.exp]
-#                                        'transformer' : [power_transformer_dict]
-                                    }
+      
+    target_transformer_log_exp = NamedFunctionTransformer(func = np.log, inverse_func = np.exp, name = 'log_exp')   
+    target_transformer_log1p_expm1 = NamedFunctionTransformer(func = np.log1p, inverse_func = np.expm1, name = 'log1p_expm1')   
+                                
+
+
+
+    MultiRegressorWithTargetTransformation_params = {   
+                                                        'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
+                #                                        'func_inverse_func_pair' : [(np.log, np.exp), (np.log1p, np.expm1)],
+                #                                        'inverse_func' : [np.exp]
+                                                        'transformer' : [target_transformer_log_exp, target_transformer_log1p_expm1]
+                                                    }
    
 #    MultiTransformedTargetRegressor_params =        {   
 #                                        'transformer' : [PowerTransformer()]
@@ -937,15 +955,20 @@ if __name__ == '__main__':
 #                                        'estimator' : [XGBRegressor() ]
 #                                    }    
     
+    multi_regressor_params =      {   
+                                        'estimator' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ]
+                                  }
+
     
-    SelectFromModel_params =        {
-                                        'estimator' : [LinearSVR()]
+    
+    selectfrommodel_params =        {
+                                        'estimator' : [Lasso(alpha=0.1)]
                                     }
     
         
     selectfrommodel_dict =          {
 #                                        SelectFromModel(LinearSVR()) : SelectFromModel_params
-                                        SelectFromModel(LinearSVR()) 
+                                        SelectFromModel(Lasso(alpha=0.1))  
 
                                     }
     
@@ -956,42 +979,64 @@ if __name__ == '__main__':
     
 
     
-    config_dict =                   {   
+    config_dict_1 =                   {   
                                         'multitf' : multitf_params,
-#                                        'multiselector' : multi_selector_params, 
-                                        'MultiRegressorWithTargetTransformation' : MultiRegressorWithTargetTransformation_params                                        
+                                        'multiregressor' : multi_regressor_params                                        
                                     }    
-        
-#    clf = LinearRegression()
-#    clf2 = SVR(kernel="linear")
-#    selector = RFE(estimator, 5, step=1)
+    
+    
+    config_dict_2 =                   {   
+                                        'multitf' : multitf_params,
+#                                        'selectfrommodel' :selectfrommodel_params,
+                                        'multiregressor' : multi_regressor_params                                        
+                                    }  
 
-    steps = [
+    config_dict_3 =                   {   
+                                    'multitf' : multitf_params,
+                                    'MultiRegressorWithTargetTransformation' : MultiRegressorWithTargetTransformation_params                                        
+                                } 
+        
+
+  
+
+
+    config_dict = config_dict_3
+    
+    
+#    steps =     [
+#                    ('multitf' , MultiTf() ), 
+#                    ('scaler' , StandardScaler() ),
+#                    ('pca', PCA(n_components = .999)),
+##                    ('selectfrommodel', SelectFromModel(Lasso(alpha=0.1))),
+#                    ('multiregressor' , MultiRegressor() ) 
+#                ]
+    
+    
+    steps_3 = [
                 ('multitf' , MultiTf() ), 
                 ('scaler' , StandardScaler() ),
                 ('pca', PCA(n_components = .999)),
-#                ('multiselector', RFE(SVR(kernel="linear"), step=.1)) ,                 
                 ('MultiRegressorWithTargetTransformation' , MultiRegressorWithTargetTransformation() ) 
             ]
+    
+    steps = steps_3
         
     #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
-    memory = '/media/pt/hdd/from NVME/sklearn_memory/memory'
+    memory = '/media/pt/hdd/from NVME/dask_memory/memory'
     pipeline = Pipeline( memory = memory, steps = steps)    
     
 
-    
+#    from dask.distributed import Client
+#    client = Client(processes=True)
+
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
     plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
 
-    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = True, use_dask = False, prefix_for_parameters = '')
-    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', pre_dispatch='2*n_jobs', verbose = 1)
-    
-    
-    
-#    y_train_transformed = np.log1p(y_train)
-#    y_train_transformed.hist()
-#    auto_imputer.fit(joint_df, y_train_transformed)    
+    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
+    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', scheduler='processes', refit = False)
+#    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', refit = False)
 
+#    p = auto_imputer.grid_search_params
 
     auto_imputer.fit(joint_df, y_train)  
     

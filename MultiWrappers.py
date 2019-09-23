@@ -18,39 +18,68 @@ from sklearn.preprocessing import FunctionTransformer
 from sklearn.utils import check_array, safe_indexing
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import FunctionTransformer
+from sklearn.experimental import enable_iterative_imputer  # noqa
+from sklearn.impute import IterativeImputer
 
 
 
-
+global_garbage_collection = False
 
 class MultiTf(BaseEstimator, TransformerMixin):
-    def __init__(self, transformer = SimpleImputer()):
+    def __init__(self, transformer= SimpleImputer()):
         """
         A Custom BaseEstimator that can switch between classifiers.
         :param estimator: sklearn object - The classifier
         """ 
-        if type(transformer) == str:
-            transformer=eval(transformer)()
+#        if type(transformer) == str:
+#            transformer=eval(transformer)()
         self.transformer = transformer
+        
+#        print('transformer is: ', type(self.transformer).__name__)
+
             
-    def fit(self, X, y=None, **fit_params):
-        if y is not None:
-            self.transformer.fit(X)  
-            
-            #forcing garbage collection
+    def fit(self, X, y=None):
+#        assert y is not None
+        self.transformer = self.transformer
+        
+#        print('transformer is: ', type(self.transformer).__name__)
+        self.transformer.fit(X, y=None)  
+        
+        #forcing garbage collection
+        if global_garbage_collection:
             gc.collect()
             len(gc.get_objects()) # particularly this part!
             
-        return self
-    
-    def transform(self, x, y=None):        
-        result = self.transformer.transform(x)
-        return result
         
+        return self
+       
+    def fit_transform(self, X, y=None):
+#        print('transformer is: ', type(self.transformer).__name__)
+        return self.transformer.fit_transform(X, y=None)
+        
+    def transform(self, X):      
+#        print('transformer is: ', type(self.transformer).__name__)
+        X = self.transformer.transform(X)
+        return X
+    
+    def _more_tags(self):
+        return self.transformer._more_tags
 
 
+class MultiFunctionTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, func=None, inverse_func=None, validate=None, accept_sparse=False, pass_y='deprecated', check_inverse=True, kw_args=None, inv_kw_args=None, name = ''):       
+        self.transformer = FunctionTransformer(func=None, inverse_func=None, validate=None, accept_sparse=False, pass_y='deprecated', check_inverse=True, kw_args=None, inv_kw_args=None)
+        self.name = name
 
+    def _check_input(self, X):
+        return self.transformer._check_input(X)
 
+    def _check_inverse_transform(self, X):
+        self.transformer._check_inverse_transform(self, X)
+        
+        
+        
 
 class MultiRegressor(BaseEstimator, RegressorMixin):  
     """An example of classifier"""
@@ -76,6 +105,50 @@ class MultiRegressor(BaseEstimator, RegressorMixin):
         
 
 
+
+class NamedFunctionTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, func, inverse_func, name, validate=None,
+             accept_sparse=False, pass_y='deprecated', check_inverse=True,
+             kw_args=None, inv_kw_args=None):
+        self.func = func
+        self.inverse_func = inverse_func
+        self.validate = validate
+        self.accept_sparse = accept_sparse
+        self.pass_y = pass_y
+        self.check_inverse = check_inverse
+        self.kw_args = kw_args
+        self.inv_kw_args = inv_kw_args
+        self._name = name
+        
+        self.function_transformer = FunctionTransformer(func=None, inverse_func=None, validate=None,
+             accept_sparse=False, pass_y='deprecated', check_inverse=True,
+             kw_args=None, inv_kw_args=None)
+        
+
+    def _check_input(self, X):
+        return self.function_transformer._check_input(X)
+    
+    
+    def _check_inverse_transform(self, X):
+        self.function_transformer._check_inverse_transform(X)
+        
+    def fit(self, X, y=None):
+        self.function_transformer.fit(X, y=None)
+        return self
+    
+    def transform(self, X):
+        return self.function_transformer.transform(X)
+    
+    def inverse_transform(self, X):
+        return self.function_transformer.inverse_transform(X)
+    
+    def _transform(self, X, func=None, kw_args=None):
+        return self.function_transformer._transform(X, func=None, kw_args=None)
+    
+    def _more_tags(self):
+        return self.function_transformer._more_tags()
+    
+
 class MultiRegressorWithTargetTransformation(BaseEstimator, RegressorMixin):  
     """An example of classifier"""
 
@@ -90,6 +163,13 @@ class MultiRegressorWithTargetTransformation(BaseEstimator, RegressorMixin):
         self.func_inverse_func_pair = func_inverse_func_pair
         self.check_inverse=True
         
+        
+        if self.func_inverse_func_pair is not None:
+            self.func = self.func_inverse_func_pair[0]
+            self.inverse_func= self.func_inverse_func_pair[1]
+        else:
+            self.func = None
+            self.inverse_func= None        
         
 #        if transformer is None:
 #            print('Transformer is None')
@@ -134,37 +214,10 @@ class MultiRegressorWithTargetTransformation(BaseEstimator, RegressorMixin):
                 
                 
     def fit(self, X, y, sample_weight=None):
-#    def fit(self,*args, **kwargs):
-#        self.transformer = transformer
         
-#        if self.transformer is None:
-#            print('Transformer is None in fit also')
-#        else:
-#            print('Transformer:',self.transformer)
-#
-#        if y is None:
-#            print('y is None ')
-#        else:
-#            print('y is not none')
-#        
-#        if X is None:
-#            print('x is None ')
-#        else:
-#            print('x is not none')
-#            
-#            
-#        if np.isnan(X).any():
-#            print('X is nan')
-#        else:
-#            print('X is complete')
-#
-#        if np.isnan(y).any():
-#            print('y is nan')
-#        else:
-#            print('y is complete')
-        
-        self.func = self.func_inverse_func_pair[0]
-        self.inverse_func= self.func_inverse_func_pair[1]
+        if self.func_inverse_func_pair is not None:
+            self.func = self.func_inverse_func_pair[0]
+            self.inverse_func= self.func_inverse_func_pair[1]
         
         """Fit the model according to the given training data.
         Parameters
@@ -222,8 +275,9 @@ class MultiRegressorWithTargetTransformation(BaseEstimator, RegressorMixin):
 
 
         #forcing garbage collection
-        gc.collect()
-        len(gc.get_objects()) # particularly this part!
+        if global_garbage_collection:
+            gc.collect()
+            len(gc.get_objects()) # particularly this part!
         
         
         return self
@@ -273,16 +327,18 @@ class MultiTransformedTargetRegressor(BaseEstimator, RegressorMixin):
         self.target_regressor._fit_transformer(y)
         
         #forcing garbage collection
-        gc.collect()
-        len(gc.get_objects()) # particularly this part!
+        if global_garbage_collection:
+            gc.collect()
+            len(gc.get_objects()) # particularly this part!
         return self
     
     def fit(self, X, y, sample_weight=None):
         self.target_regressor.fit(X, y, sample_weight=None)
         
         #forcing garbage collection
-        gc.collect()
-        len(gc.get_objects()) # particularly this part!
+        if global_garbage_collection:
+            gc.collect()
+            len(gc.get_objects()) # particularly this part!
         return self
 
 
@@ -294,6 +350,8 @@ class MultiTransformedTargetRegressor(BaseEstimator, RegressorMixin):
         
 
 
+
+    
 
 
 
