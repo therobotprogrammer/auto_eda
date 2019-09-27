@@ -6,6 +6,12 @@ Created on Mon Aug 26 15:03:12 2019
 @author: pt
 """
 
+
+#import pandas as pd
+import dask.dataframe as pd
+
+
+
 import gc
 
 from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin, clone
@@ -17,7 +23,8 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.utils import check_array, safe_indexing
 import numpy as np
-import pandas as pd
+
+
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.experimental import enable_iterative_imputer  # noqa
 from sklearn.impute import IterativeImputer

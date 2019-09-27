@@ -5,24 +5,26 @@ Created on Wed Aug  7 11:51:14 2019
 
 @author: pt
 """
-import pandas as pd
+#import pandas as pd
+import dask.dataframe as pd
+
+
+
+
 from sklearn.pipeline import make_pipeline, Pipeline
 import itertools
 import numpy as np
-from Plotter import Plotter
 import numbers    
 from pandas.api.types import is_numeric_dtype
 import re, mpu
 import plotly.graph_objects as go
-from SaveAndLoad import SaveAndLoad
 import colorlover as cl
 
 
-from ParallelCPU import ParallelCPU
-import deep_compare
+#import deep_compare
 import copy
 
-from deep_eq import deep_eq
+#from deep_eq import deep_eq
 import math
 
 from dask_ml.wrappers import ParallelPostFit
@@ -30,6 +32,18 @@ from dask_ml.wrappers import ParallelPostFit
 from dask_ml.model_selection import GridSearchCV
 #from sklearn.model_selection import GridSearchCV
 
+
+import sys
+sys.path.insert(0, '/home/pt/Documents/auto_eda')  
+from Plotter import Plotter
+from SaveAndLoad import SaveAndLoad
+from ParallelCPU import ParallelCPU
+
+
+import os
+
+
+    
 class Analyzer:
     def __init__(self, message, plot_dir = '', show_plots = True, database = None, debug_mode = False, use_precomputed_results = True, compact_plots = True, use_dask = False, prefix_for_parameters = ''):        
         self.config = None
@@ -224,6 +238,7 @@ class Analyzer:
     def fit(self, X, y):       
 
 
+
             
         #to do: remove this
         if self.use_precomputed_results:
@@ -248,7 +263,8 @@ class Analyzer:
                 t1 = time.time()
                     
 
-                self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())                    
+#                self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())                    
+                self.grid_search_estimator.fit(X, y)                    
 
                     
                 t2 = time.time()         
@@ -279,11 +295,23 @@ class Analyzer:
 
 
         else:
+            
+            
+            import dask.array as da
+        
+#            X_dask = da.from_array(X.to_numpy(), chunks = 500)        
+#            y_dask = da.from_array(y.to_numpy(), chunks = 500)
+ 
+#            X_dask = pd.from_pandas(X, npartitions = 2)        
+#            y_dask = pd.from_pandas(y, npartitions = 2)
+            
             self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **self.grid_search_arguments)        
 
             t1 = time.time()
-#            self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())
-            self.grid_search_estimator.fit(X, y)
+            self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())
+#            self.grid_search_estimator.fit(X, y)
+#            self.grid_search_estimator.fit(X_dask, y_dask)
+
             
             t2 = time.time()         
             self.processing_time_ = t2-t1   
@@ -777,12 +805,15 @@ class Analyzer:
 if __name__ == '__main__':
     from mlflow import log_metric, log_param, log_artifacts
 
-
-    import sys
-    sys.path.insert(0, '/home/pt/Documents/auto_eda')   
+ 
     from MultiWrappers import MultiTf, MultiRegressor, MultiRegressorWithTargetTransformation, MultiTransformedTargetRegressor, NamedFunctionTransformer
     from SaveAndLoad import SaveAndLoad
     from xgboost.sklearn import XGBRegressor
+#    from dask_ml.xgboost import XGBRegressor
+#    import xgboost as xgb
+#
+#    xgb.__version__
+
 
     from sklearn.experimental import enable_iterative_imputer  # noqa
     from sklearn.datasets import fetch_california_housing
@@ -823,7 +854,6 @@ if __name__ == '__main__':
 
 
 
-    import pandas as pd
     import matplotlib.pyplot as plt
     import seaborn as sns
     import os
@@ -882,16 +912,16 @@ if __name__ == '__main__':
     
     
     bayesianRidge_params =          {
-#                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
-                                        'n_iter' : [24]
+                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
+#                                        'n_iter' : [24]
                                     }
     
     
     estimator_list =                [   
                                         {BayesianRidge() : bayesianRidge_params},
-#                                        DecisionTreeRegressor(),
-#                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
-#                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
+                                        DecisionTreeRegressor(),
+                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                                     ]
     
     
@@ -940,15 +970,19 @@ if __name__ == '__main__':
     target_transformer_log1p_expm1 = NamedFunctionTransformer(func = np.log1p, inverse_func = np.expm1, name = 'log1p_expm1')   
                                 
 
-
+    xgboost_dict = {    
+                        XGBRegressor(): [ {'n_jobs' : [-1] } ] 
+                    }
 
     MultiRegressorWithTargetTransformation_params = {   
-                                                        'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
+#                                                        'regressor' : [xgboost_dict],
+
+                                                        'regressor' : [xgboost_dict, AdaBoostRegressor(), KNeighborsRegressor() ],
 #                                                        'regressor' : [AdaBoostRegressor(), KNeighborsRegressor() ],
     
                 #                                        'func_inverse_func_pair' : [(np.log, np.exp), (np.log1p, np.expm1)],
                 #                                        'inverse_func' : [np.exp]
-                                                        'transformer' : [target_transformer_log_exp, target_transformer_log1p_expm1]
+                                                        'transformer' : [target_transformer_log1p_expm1]                                                        
                                                     }
    
 #    MultiTransformedTargetRegressor_params =        {   
@@ -959,9 +993,9 @@ if __name__ == '__main__':
 #                                        'estimator' : [XGBRegressor() ]
 #                                    }    
     
-    multi_regressor_params =      {   
-                                        'estimator' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ]
-                                  }
+#    multi_regressor_params =      {   
+#                                        'estimator' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ]
+#                                  }
 
     
     
@@ -985,6 +1019,32 @@ if __name__ == '__main__':
     dasktf_params = {
                         'estimator' : [simple_imputer_dict, iterative_imputer_dict]
                     }
+ 
+    dask_MultiRegressorWithTargetTransformation_dict = {
+                                                            MultiRegressorWithTargetTransformation(): [MultiRegressorWithTargetTransformation_params]
+                                                        }
+    
+    
+    DaskMultiRegressorWithTargetTransformation_params     = {
+                                                                'estimator': dask_MultiRegressorWithTargetTransformation_dict
+                                                            }
+    
+    TransformedTargetRegressor_params = {
+#                                           'regressor' : [AdaBoostRegressor(), KNeighborsRegressor() ],
+
+                                           'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
+                                           'func': [np.log1p], 
+                                           'inverse_func': [np.expm1]                                            
+                                       }
+   
+    TransformedTargetRegressor_dict = {
+                                            TransformedTargetRegressor() : TransformedTargetRegressor_params
+                                        }
+    
+    DaskMultiRegressorWithTargetTransformation_params_2     = {
+                                                                'estimator': TransformedTargetRegressor_dict
+                                                            }
+    
     
 #    config_dict_1 =                   {   
 #                                        'multitf' : multitf_params,
@@ -1007,10 +1067,15 @@ if __name__ == '__main__':
                                     'dasktf' : dasktf_params,
                                     'MultiRegressorWithTargetTransformation' : MultiRegressorWithTargetTransformation_params                                        
                                 } 
-  
+
+    config_dict_5 =                   {   
+                                    'dasktf' : dasktf_params,
+                                    'DaskMultiRegressorWithTargetTransformation' : DaskMultiRegressorWithTargetTransformation_params_2                                        
+                                } 
+    
 
 
-    config_dict = config_dict_4
+    config_dict = config_dict_5
     
     
 #    steps =     [
@@ -1036,11 +1101,17 @@ if __name__ == '__main__':
             ('pca', PCA(n_components = .999)),
             ('MultiRegressorWithTargetTransformation' , MultiRegressorWithTargetTransformation() ) 
         ]
+
+    steps_5 = [
+            ('dasktf' , ParallelPostFit() ), 
+            ('scaler' , StandardScaler() ),
+            ('pca', PCA(n_components = .999)),
+            ('DaskMultiRegressorWithTargetTransformation' , ParallelPostFit() ) 
+        ]
     
-    steps = steps_4
+    steps = steps_5
         
     #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
-    memory = '/media/pt/hdd/from NVME/dask_memory/memory'
     pipeline = Pipeline( memory = memory, steps = steps)    
     
 
@@ -1050,16 +1121,36 @@ if __name__ == '__main__':
     database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
     plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
     
-    from distributed import Client
-    client = Client()
+
     
+    from distributed import Client
+    from distributed.deploy.local import LocalCluster
+    memory = '/media/pt/nvme/dask_memory'
+    
+    cluster = LocalCluster(n_workers = 4, threads_per_worker = 6, memory_limit='128GB', local_dir=os.path.join(memory)  )
+    client = Client(cluster)
+    print(client)
+    
+    
+    
+    
+#    client = Client(memory_limit='240GB')
+#    print(client)
+
+#    from distributed import Client
+#    client = Client()
+#    client
+
+
 
     auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
-    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', scheduler=client, refit = False, cache_cv = True)
+    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, scoring = 'neg_mean_squared_log_error', scheduler=client, refit = False, cache_cv = True)
 #    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', refit = False)
 
-#    p = auto_imputer.grid_search_params
+    p = auto_imputer.grid_search_params
 
+  
+    
     auto_imputer.fit(joint_df, y_train)  
     
 
