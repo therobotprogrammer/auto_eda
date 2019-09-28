@@ -977,7 +977,7 @@ if __name__ == '__main__':
     MultiRegressorWithTargetTransformation_params = {   
 #                                                        'regressor' : [xgboost_dict],
 
-                                                        'regressor' : [xgboost_dict, AdaBoostRegressor(), KNeighborsRegressor() ],
+                                                        'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
 #                                                        'regressor' : [AdaBoostRegressor(), KNeighborsRegressor() ],
     
                 #                                        'func_inverse_func_pair' : [(np.log, np.exp), (np.log1p, np.expm1)],
@@ -1031,10 +1031,11 @@ if __name__ == '__main__':
     
     TransformedTargetRegressor_params = {
 #                                           'regressor' : [KNeighborsRegressor() ],
-
                                            'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
-                                           'func': [np.log1p], 
-                                           'inverse_func': [np.expm1]                                            
+                                           'transformer' : [target_transformer_log1p_expm1]     
+    
+#                                           'func': [np.log1p], 
+#                                           'inverse_func': [np.expm1]                                            
                                        }
    
     TransformedTargetRegressor_dict = {
@@ -1075,11 +1076,15 @@ if __name__ == '__main__':
 
     config_dict_6 =                   {   
                                     'multitf' : multitf_params,
-                                    'DaskMultiRegressorWithTargetTransformation' : DaskMultiRegressorWithTargetTransformation_params_2                                        
+                                    'DaskMultiRegressorWithTargetTransformation' : MultiRegressorWithTargetTransformation                                        
                                 }     
 
+    config_dict_7 =                   {   
+                                    'multitf' : multitf_params,
+                                    'DaskMultiRegressorWithTargetTransformation' : TransformedTargetRegressor_params                                        
+                                }     
 
-    config_dict = config_dict_5
+    config_dict = config_dict_7
     
     
 #    steps =     [
@@ -1118,8 +1123,17 @@ if __name__ == '__main__':
             ('scaler' , StandardScaler() ),
             ('pca', PCA(n_components = .999)),
             ('DaskMultiRegressorWithTargetTransformation' , ParallelPostFit() ) 
-        ]    
-    steps = steps_5
+        ] 
+    
+
+    steps_7 = [
+            ('multitf' , MultiTf() ), 
+            ('scaler' , StandardScaler() ),
+            ('pca', PCA(n_components = .999)),
+            ('DaskMultiRegressorWithTargetTransformation' , TransformedTargetRegressor() ) 
+        ]     
+    
+    steps = steps_7
         
     #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
     pipeline = Pipeline( memory = memory, steps = steps)    
