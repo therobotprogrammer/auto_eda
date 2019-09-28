@@ -1030,7 +1030,7 @@ if __name__ == '__main__':
                                                             }
     
     TransformedTargetRegressor_params = {
-#                                           'regressor' : [AdaBoostRegressor(), KNeighborsRegressor() ],
+#                                           'regressor' : [KNeighborsRegressor() ],
 
                                            'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
                                            'func': [np.log1p], 
@@ -1072,7 +1072,11 @@ if __name__ == '__main__':
                                     'dasktf' : dasktf_params,
                                     'DaskMultiRegressorWithTargetTransformation' : DaskMultiRegressorWithTargetTransformation_params_2                                        
                                 } 
-    
+
+    config_dict_6 =                   {   
+                                    'multitf' : multitf_params,
+                                    'DaskMultiRegressorWithTargetTransformation' : DaskMultiRegressorWithTargetTransformation_params_2                                        
+                                }     
 
 
     config_dict = config_dict_5
@@ -1108,7 +1112,13 @@ if __name__ == '__main__':
             ('pca', PCA(n_components = .999)),
             ('DaskMultiRegressorWithTargetTransformation' , ParallelPostFit() ) 
         ]
-    
+ 
+    steps_6 = [
+            ('multitf' , MultiTf() ), 
+            ('scaler' , StandardScaler() ),
+            ('pca', PCA(n_components = .999)),
+            ('DaskMultiRegressorWithTargetTransformation' , ParallelPostFit() ) 
+        ]    
     steps = steps_5
         
     #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
