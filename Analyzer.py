@@ -298,18 +298,24 @@ class Analyzer:
             
             
             import dask.array as da
+            import dask.dataframe as dd
         
 #            X_dask = da.from_array(X.to_numpy(), chunks = 500)        
 #            y_dask = da.from_array(y.to_numpy(), chunks = 500)
  
-#            X_dask = pd.from_pandas(X, npartitions = 2)        
-#            y_dask = pd.from_pandas(y, npartitions = 2)
+#            X_dask = dd.from_pandas(X, npartitions = 2)        
+#            y_dask = dd.from_pandas(y, npartitions = 2)
+            
+#            X = dd.from_pandas(X, npartitions=4).to_dask_array(lengths=True)
+#            y = dd.from_pandas(y, npartitions=4).to_dask_array(lengths=True)
+
+            X = X.to_numpy()
+            y = y.to_numpy()
             
             self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **self.grid_search_arguments)        
 
             t1 = time.time()
-            self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())
-#            self.grid_search_estimator.fit(X, y)
+            self.grid_search_estimator.fit(X, y)
 #            self.grid_search_estimator.fit(X_dask, y_dask)
 
             
@@ -1084,7 +1090,7 @@ if __name__ == '__main__':
                                     'DaskMultiRegressorWithTargetTransformation' : TransformedTargetRegressor_params                                        
                                 }     
 
-    config_dict = config_dict_7
+    config_dict = config_dict_5
     
     
 #    steps =     [
@@ -1133,7 +1139,7 @@ if __name__ == '__main__':
             ('DaskMultiRegressorWithTargetTransformation' , TransformedTargetRegressor() ) 
         ]     
     
-    steps = steps_7
+    steps = steps_5
         
     #    memory = '/media/pt/hdd/Auto EDA Results/regression/results/memory'
     pipeline = Pipeline( memory = memory, steps = steps)    
@@ -1151,7 +1157,7 @@ if __name__ == '__main__':
     from distributed.deploy.local import LocalCluster
     memory = '/media/pt/nvme/dask_memory'
     
-    cluster = LocalCluster(n_workers = 4, threads_per_worker = 6, memory_limit='128GB', local_dir=os.path.join(memory)  )
+    cluster = LocalCluster(n_workers = 2, threads_per_worker = 12, memory_limit='256GB', local_dir=os.path.join(memory)  )
     client = Client(cluster)
     print(client)
     
@@ -1167,21 +1173,33 @@ if __name__ == '__main__':
 
 
 
-    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
+    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = True, use_dask = True, prefix_for_parameters = '')
     auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, scoring = 'neg_mean_squared_log_error', scheduler=client, refit = False, cache_cv = True)
 #    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', refit = False)
 
     p = auto_imputer.grid_search_params
-
-  
-    
     auto_imputer.fit(joint_df, y_train)  
+    t1 = auto_imputer.processing_time_    
+    client.close()
+
+
+
+#    cluster = LocalCluster(n_workers = 8, threads_per_worker = 3, memory_limit='1024GB', local_dir=os.path.join(memory)  )
+#    client = Client(cluster)
+#    print(client)
+#
+#    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
+#    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, scoring = 'neg_mean_squared_log_error', scheduler=client, refit = False, cache_cv = True)
+##    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', refit = False)
+#
+#    p = auto_imputer.grid_search_params
+#    auto_imputer.fit(joint_df, y_train)  
+#    t2 = auto_imputer.processing_time_    
+#    client.close()
+#
+
+
     
-
-
-
-
-
     
 #    database = SaveAndLoad('/media/pt/hdd/Auto EDA Results/unit_tests/pickles')
 #    plot_dir = ('/media/pt/hdd/Auto EDA Results/unit_tests/analyzer_plots')
