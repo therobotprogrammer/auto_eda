@@ -819,7 +819,7 @@ if __name__ == '__main__':
     from sklearn.feature_selection import RFE
     from sklearn.svm import SVR
     from sklearn.impute import SimpleImputer
-    from sklearn.preprocessing import StandardScaler
+    from sklearn.preprocessing import StandardScaler, RobustScaler
     from sklearn.ensemble import AdaBoostRegressor
     from sklearn.neighbors import KNeighborsRegressor
     from sklearn.decomposition import PCA
@@ -1025,9 +1025,9 @@ if __name__ == '__main__':
 #                                                           XGBRegressor(),\
 #                                                           AdaBoostRegressor(), \
 #                                                           KNeighborsRegressor()],
-                                           'regressor' : [ {Ridge() : {'alpha' :  [14.5]  } } ,
-                                                           {Lasso()  : {'max_iter':[1e7], 'alpha' :  [14.5]  } } ,
-                                                           {ElasticNet()  : {'max_iter':[1e7], 'alpha' :  [0.0001], 'l1_ratio': [0.8] } } ,
+                                           'regressor' : [ {Ridge() : {'alpha' :  [14.5, 14.6, 14.7, 14.8, 14.9, 15, 15.1, 15.2, 15.3, 15.4, 15.5]  } } ,
+                                                           {Lasso()  : {'max_iter':[1e7], 'alpha' :  [5e-05, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007, 0.0008]  } } ,
+                                                           {ElasticNet()  : {'max_iter':[1e7], 'alpha' :  [0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007], 'l1_ratio': [0.8, 0.85, 0.9, 0.95, 0.99, 1] } } ,
 
                                                             XGBRegressor(), 
                                                             AdaBoostRegressor(), 
@@ -1099,7 +1099,7 @@ if __name__ == '__main__':
     steps_3 = [
                 ('multitf' , MultiTf() ), 
                 ('scaler' , StandardScaler() ),
-                ('pca', PCA(n_components = .999)),
+                ('pca', PCA(n_components = [.999, .95])),
                 ('MultiRegressorWithTargetTransformation' , MultiRegressorWithTargetTransformation() ) 
             ]
     
@@ -1113,8 +1113,8 @@ if __name__ == '__main__':
 
     steps_5 = [
             ('dasktf' , ParallelPostFit() ), 
-            ('scaler' , StandardScaler() ),
-            ('pca', PCA(n_components = .999)),
+            ('scaler' , RobustScaler() ),
+            ('pca', PCA(n_components = .95)),
             ('DaskMultiRegressorWithTargetTransformation' , ParallelPostFit() ) 
         ]
  
