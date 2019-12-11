@@ -29,13 +29,17 @@ import plotly.graph_objects as go
 
 class Plotter:
     
-    def __init__(self, top_save_directory):   
+    def __init__(self, top_save_directory, print_plot_id = True):   
         if not os.path.isdir(top_save_directory):
-            os.makedirs(top_save_directory)
+            os.makedirs(top_save_directory)            
             
         self.top_save_directory = top_save_directory  
         self.current_directory  = top_save_directory
 #        self.set_current_dir('')
+        
+        self.print_plot_id = print_plot_id
+        self.current_plot_id = 0
+        
         
         self.color_list =             ['aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure,\
             beige', 'bisque', 'black', 'blanchedalmond', 'blue,\
@@ -107,6 +111,9 @@ class Plotter:
         self.current_directory = current_directory
         
         
+    def save_and_show(self, plt, file_name, dpi = 1200): 
+        plt.savefig(file_name, dpi)
+        plt.show()
         
         
     def plot_cat_cat(self, x,y):            

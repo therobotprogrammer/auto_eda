@@ -5,8 +5,8 @@ Created on Wed Aug  7 11:51:14 2019
 
 @author: pt
 """
-#import pandas as pd
-import dask.dataframe as pd
+import pandas as pd
+#import dask.dataframe as pd
 
 
 
@@ -19,6 +19,8 @@ from pandas.api.types import is_numeric_dtype
 import re, mpu
 import plotly.graph_objects as go
 import colorlover as cl
+import inspect
+
 
 
 #import deep_compare
@@ -80,9 +82,7 @@ class Analyzer:
         self.processed_results_dict = None
         
         
-                
 
-                    
                     
     def gererate_params(self, config_dict):        
         generated_params = self.__dp(config_dict, self.prefix_for_parameters)
@@ -96,7 +96,6 @@ class Analyzer:
         self.grid_search_params = self.gererate_params(config) 
 
 
-    import inspect
 
 
     #this function is needed because math.isnan() will raise an error if it is given a function
@@ -211,16 +210,6 @@ class Analyzer:
         else:
              return matching_precomputed_result, self.grid_search_params
 
-
-
-            ################# continue from here######################
-#            self.grid_search_params = self.grid_search_params.
-        
-#    def update_precomputed_results(self, X, y, new_params, )    :
-        
-        
-#    def merge_precomputed_results():
-        
     
 
 
@@ -235,10 +224,9 @@ class Analyzer:
     
     
 
-    def fit(self, X, y):       
-
-
-
+    def fit(self, X, y): 
+        self.cv_results = None    
+        self.processed_results_dict = None
             
         #to do: remove this
         if self.use_precomputed_results:
@@ -253,15 +241,9 @@ class Analyzer:
 
 
             else:
-                reduced_grid_search_params_copy = copy.deepcopy(reduced_grid_search_params)
-                
-#                p1 = reduced_grid_search_params[0]['multiregressor__estimator']
-#                p1 = str(p1)
-                
-                self.grid_search_estimator = GridSearchCV(self.pipeline, reduced_grid_search_params_copy, **self.grid_search_arguments)    
-                
-                t1 = time.time()
-                    
+                reduced_grid_search_params_copy = copy.deepcopy(reduced_grid_search_params)               
+                self.grid_search_estimator = GridSearchCV(self.pipeline, reduced_grid_search_params_copy, **self.grid_search_arguments)                    
+                t1 = time.time()                    
 
 #                self.grid_search_estimator.fit(X.to_numpy(), y.to_numpy())                    
                 self.grid_search_estimator.fit(X, y)                    
@@ -271,32 +253,31 @@ class Analyzer:
                 self.processing_time_ = t2-t1   
                 
                 self.cv_results = self.grid_search_estimator.cv_results_    
-                processed_results_dict = self.process_results(self.cv_results, self.pipeline)
+                self.processed_results_dict = self.process_results(self.cv_results, self.pipeline)
                 
                 self.update_precomputed_result_archive(X, y, reduced_grid_search_params, processed_results_dict)        
                 
-                p2 = reduced_grid_search_params[0]['multiregressor__estimator']
-                p2 = str(p2)                
-                
-                p3 = reduced_grid_search_params_copy[0]['multiregressor__estimator']
-                p3 = str(p3)                     
+#                p2 = reduced_grid_search_params[0]['multiregressor__estimator']
+#                p2 = str(p2)                
+#                
+#                p3 = reduced_grid_search_params_copy[0]['multiregressor__estimator']
+#                p3 = str(p3)                     
                 
                 
                 if matching_precomputed_result is not None:
                     #to do: merge here
-                    self.processed_results_dict = matching_precomputed_result['processed_results_dict']
+                    precomputed_processed_results_dict = matching_precomputed_result['processed_results_dict']
     
     
                     #load back precomputed data
-                    for key, df in self.processed_results_dict.items():
-                        df = df.append(matching_precomputed_result['processed_results_dict'][key], ignore_index=True)     
+                    for key, df in precomputed_processed_results_dict.items():
+                        new_df = self.processed_results_dict[key]
+                        precomputed_df = matching_precomputed_result['processed_results_dict'][key]
+                        
+                        self.processed_results_dict[key] = new_df.append(precomputed_df,  ignore_index=True)
+#                        df = processed_results_dict[key].append(matching_precomputed_result['processed_results_dict'][key], ignore_index=True)     
 
-
-
-
-        else:
-            
-            
+        else:                      
             import dask.array as da
             import dask.dataframe as dd
         
@@ -309,8 +290,8 @@ class Analyzer:
 #            X = dd.from_pandas(X, npartitions=4).to_dask_array(lengths=True)
 #            y = dd.from_pandas(y, npartitions=4).to_dask_array(lengths=True)
 
-            X = X.to_numpy()
-            y = y.to_numpy()
+#            X = X.to_numpy()
+#            y = y.to_numpy()
             
             self.grid_search_estimator = GridSearchCV(self.pipeline, self.grid_search_params, **self.grid_search_arguments)        
 
@@ -899,11 +880,11 @@ if __name__ == '__main__':
 
 
     ExtraTreesRegressor_params =    {
-                                        'max_depth': get_equally_spaced_numbers_in_range(1,100,10) , 
-                                        'n_estimators': get_equally_spaced_numbers_in_range(1,2000,10),
+#                                        'max_depth': get_equally_spaced_numbers_in_range(5,35,10) , 
+                                        'n_estimators': get_equally_spaced_numbers_in_range(1,60,10),
 
-#                                        'max_depth': get_equally_spaced_numbers_in_range(1,4,4) ,
-#                                        'n_estimators': get_equally_spaced_numbers_in_range(2,4,4),
+                                        'max_depth': get_equally_spaced_numbers_in_range(10,14,2) ,
+#                                        'n_estimators': get_equally_spaced_numbers_in_range(2,4,2),
                                         'random_state' : [global_random_seed]
 #                                        'max_depth': [1] , 
 #                                        'n_estimators': [1], 
@@ -912,14 +893,15 @@ if __name__ == '__main__':
     
     
     KNeighborsRegressor_params =    {
-                                        'n_neighbors' : [2,3,4],
+                                        'n_neighbors' : [2,3],
 #                                        'n_neighbors' : [2],
                                     }
     
     
     bayesianRidge_params =          {
-                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
-#                                        'n_iter' : [24]
+#                                        'n_iter' : get_equally_spaced_numbers_in_range(1950,4000,10)
+                                        'n_iter' : [2,4]
+#                                        'n_iter' : [2]
                                     }
     
     
@@ -1036,9 +1018,9 @@ if __name__ == '__main__':
                                                             }
     
     TransformedTargetRegressor_params = {
-#                                           'regressor' : [KNeighborsRegressor() ],
-                                           'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
-                                           'transformer' : [target_transformer_log1p_expm1]     
+                                           'regressor' : [KNeighborsRegressor() ],
+#                                           'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
+#                                           'transformer' : [target_transformer_log1p_expm1]     
     
 #                                           'func': [np.log1p], 
 #                                           'inverse_func': [np.expm1]                                            
@@ -1157,7 +1139,7 @@ if __name__ == '__main__':
     from distributed.deploy.local import LocalCluster
     memory = '/media/pt/nvme/dask_memory'
     
-    cluster = LocalCluster(n_workers = 2, threads_per_worker = 12, memory_limit='256GB', local_dir=os.path.join(memory)  )
+    cluster = LocalCluster(n_workers = 12, threads_per_worker = 2, memory_limit='256GB', local_dir=os.path.join(memory)  )
     client = Client(cluster)
     print(client)
     
@@ -1173,7 +1155,7 @@ if __name__ == '__main__':
 
 
 
-    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = True, use_dask = True, prefix_for_parameters = '')
+    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
     auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, scoring = 'neg_mean_squared_log_error', scheduler=client, refit = False, cache_cv = True)
 #    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', refit = False)
 
@@ -1181,6 +1163,8 @@ if __name__ == '__main__':
     auto_imputer.fit(joint_df, y_train)  
     t1 = auto_imputer.processing_time_    
     client.close()
+
+
 
 
 
