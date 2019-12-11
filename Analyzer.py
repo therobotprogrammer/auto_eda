@@ -255,7 +255,7 @@ class Analyzer:
                 self.cv_results = self.grid_search_estimator.cv_results_    
                 self.processed_results_dict = self.process_results(self.cv_results, self.pipeline)
                 
-                self.update_precomputed_result_archive(X, y, reduced_grid_search_params, processed_results_dict)        
+                self.update_precomputed_result_archive(X, y, reduced_grid_search_params, self.processed_results_dict)        
                 
 #                p2 = reduced_grid_search_params[0]['multiregressor__estimator']
 #                p2 = str(p2)                
@@ -831,6 +831,8 @@ if __name__ == '__main__':
     from sklearn.compose import TransformedTargetRegressor
     from sklearn.svm import LinearSVC
     from sklearn.linear_model import LogisticRegression
+    from sklearn.linear_model import Ridge, Lasso, ElasticNet
+    
 
 
     global_random_seed = 0
@@ -906,10 +908,10 @@ if __name__ == '__main__':
     
     
     estimator_list =                [   
-                                        {BayesianRidge() : bayesianRidge_params},
+#                                        {BayesianRidge() : bayesianRidge_params},
                                         DecisionTreeRegressor(),
-                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
-                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
+#                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+#                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                                     ]
     
     
@@ -1018,9 +1020,19 @@ if __name__ == '__main__':
                                                             }
     
     TransformedTargetRegressor_params = {
-                                           'regressor' : [KNeighborsRegressor() ],
-#                                           'regressor' : [XGBRegressor(), AdaBoostRegressor(), KNeighborsRegressor() ],
-#                                           'transformer' : [target_transformer_log1p_expm1]     
+#                                           'regressor' : [KNeighborsRegressor() ],
+#                                           'regressor' : [ {Ridge() : {'alpha' :  [1.0]  } } ,\
+#                                                           XGBRegressor(),\
+#                                                           AdaBoostRegressor(), \
+#                                                           KNeighborsRegressor()],
+                                           'regressor' : [ {Ridge() : {'alpha' :  [14.5]  } } ,
+                                                           {Lasso()  : {'max_iter':[1e7], 'alpha' :  [14.5]  } } ,
+                                                           {ElasticNet()  : {'max_iter':[1e7], 'alpha' :  [0.0001], 'l1_ratio': [0.8] } } ,
+
+                                                            XGBRegressor(), 
+                                                            AdaBoostRegressor(), 
+                                                            KNeighborsRegressor() ],
+                                           'transformer' : [target_transformer_log1p_expm1]     
     
 #                                           'func': [np.log1p], 
 #                                           'inverse_func': [np.expm1]                                            
@@ -1155,7 +1167,7 @@ if __name__ == '__main__':
 
 
 
-    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = False, use_dask = True, prefix_for_parameters = '')
+    auto_imputer = Analyzer(plot_dir = plot_dir, message = 'Imputer Analysis', database = database, debug_mode = True, show_plots = True, use_precomputed_results = True, use_dask = True, prefix_for_parameters = '')
     auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, scoring = 'neg_mean_squared_log_error', scheduler=client, refit = False, cache_cv = True)
 #    auto_imputer.gridsearchcv(pipeline, config_dict, cv = 10, n_jobs = -1, scoring = 'neg_mean_squared_log_error', refit = False)
 
