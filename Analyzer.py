@@ -882,10 +882,10 @@ if __name__ == '__main__':
 
 
     ExtraTreesRegressor_params =    {
-#                                        'max_depth': get_equally_spaced_numbers_in_range(5,35,10) , 
+                                        'max_depth': get_equally_spaced_numbers_in_range(5,35,10) , 
                                         'n_estimators': get_equally_spaced_numbers_in_range(1,60,10),
 
-                                        'max_depth': get_equally_spaced_numbers_in_range(10,14,2) ,
+#                                        'max_depth': get_equally_spaced_numbers_in_range(10,14,2) ,
 #                                        'n_estimators': get_equally_spaced_numbers_in_range(2,4,2),
                                         'random_state' : [global_random_seed]
 #                                        'max_depth': [1] , 
@@ -901,17 +901,17 @@ if __name__ == '__main__':
     
     
     bayesianRidge_params =          {
-#                                        'n_iter' : get_equally_spaced_numbers_in_range(1950,4000,10)
-                                        'n_iter' : [2,4]
+                                        'n_iter' : get_equally_spaced_numbers_in_range(1950,4000,10)
+#                                        'n_iter' : [2,4]
 #                                        'n_iter' : [2]
                                     }
     
     
     estimator_list =                [   
-#                                        {BayesianRidge() : bayesianRidge_params},
+                                        {BayesianRidge() : bayesianRidge_params},
                                         DecisionTreeRegressor(),
-#                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
-#                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
+                                        {KNeighborsRegressor() : KNeighborsRegressor_params},
+                                        {ExtraTreesRegressor() : ExtraTreesRegressor_params}
                                     ]
     
     
@@ -1099,7 +1099,7 @@ if __name__ == '__main__':
     steps_3 = [
                 ('multitf' , MultiTf() ), 
                 ('scaler' , StandardScaler() ),
-                ('pca', PCA(n_components = [.999, .95])),
+                ('pca', PCA(n_components = .95)),
                 ('MultiRegressorWithTargetTransformation' , MultiRegressorWithTargetTransformation() ) 
             ]
     

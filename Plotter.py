@@ -117,7 +117,7 @@ class Plotter:
         
         
     def plot_cat_cat(self, x,y):            
-        message = 'Plotter cat-cat' + x.name + 'vs target '+ y.name
+        message = 'Plotter_cat_cat' + x.name + 'vs_target_'+ y.name
         print(message)
         
         plt.figure()
@@ -134,7 +134,7 @@ class Plotter:
     
         
     def plot_cat_cont(self, x,y, kde = True):
-        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
+        message = 'Plotter_cat_cont_' + x.name + 'vs_target_'+ y.name
         print(message)
         plt.figure()
         
@@ -157,7 +157,7 @@ class Plotter:
     
     
     def plot_cont_cont(self, x,y):
-        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
+        message = 'Plotter_cat_cont' + x.name + 'vs_target_'+ y.name
         print(message)
         plt.figure()
 #        sns.FacetGrid(train, hue = "Survived", height=6).map(sns.kdeplot, column).add_legend()          
@@ -172,7 +172,7 @@ class Plotter:
         plt.show()
 
     def plot_cont_cat(self, x,y):
-        message = 'Plotter cat-cont  ' + x.name + 'vs target '+ y.name
+        message = 'Plotter_cat_cont' + x.name + 'vs_target_'+ y.name
         print(message)
         plt.figure()      
         
@@ -197,8 +197,13 @@ class Plotter:
         plt.show()
         
     def box_plot_df(self, df_local, message = ''):
-        df_local.iplot(kind='box', boxpoints='outliers', title = message + ' - Box Plot')
-
+#        fig = go.Figure()
+        filename = os.path.join(self.current_directory, message + '_box_plot.html')   
+#        fig = plotly.offline.plot(fig, show_link = True, filename = filename)  
+#        print('>>>>>>' , filename)
+        
+        fig = df_local.iplot(kind='box', boxpoints='outliers', title = message + ' - Box Plot', asFigure = True, asUrl = True)
+        plotly.offline.plot(fig, show_link = True, filename = filename)  
 
     def box_plot_plotly_express(self, df_local, message = ''):
         fig = px.box(df_local)        
@@ -235,7 +240,7 @@ class Plotter:
             fig.add_trace(go.Box(x=temp['x'],
                                     y=temp[column],
                                     name=column,
-                                    boxpoints = 'all',
+                                    boxpoints = 'outliers',
                                     boxmean = True,                           
                                     ) )
 

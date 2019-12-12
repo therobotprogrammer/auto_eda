@@ -5,14 +5,26 @@ Created on Fri Apr  5 21:41:09 2019
 
 @author: pt
 """
+#
+#
+#graphs = [
+#    '/home/pt/Documents/auto_eda/regression/results/reduced_dims_on_scaled_pca.html',
+#    '/home/pt/Documents/auto_eda/regression/results/reduced_dims_on_unscaled_tsne.html',
+#    '/home/pt/Documents/auto_eda/regression/results/reduced_dims_on_scaled_tsne.html' ,
+#    '/home/pt/Documents/auto_eda/regression/results/TSNE.html'
+#]
 
 
-graphs = [
-    '/home/pt/Documents/auto_eda/regression/results/reduced_dims_on_scaled_pca.html',
-    '/home/pt/Documents/auto_eda/regression/results/reduced_dims_on_unscaled_tsne.html',
-    '/home/pt/Documents/auto_eda/regression/results/reduced_dims_on_scaled_tsne.html' ,
-    '/home/pt/Documents/auto_eda/regression/results/TSNE.html'
-]
+import os
+
+results_dir = '/home/pt/Desktop/Plotly Graphs'
+
+graphs = os.listdir(results_dir)
+
+
+if not os.path.isdir(results_dir):
+    os.mkdir(results_dir)
+
 
 #
 #graphs = [
