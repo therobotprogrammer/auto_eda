@@ -1,4 +1,4 @@
-p#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed Jul 31 12:11:29 2019
@@ -13,68 +13,17 @@ Created on Mon Jul 29 20:08:46 2019
 
 @author: pt
 """
-
-
-
-
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 import os
-
-
 from concurrent.futures import ProcessPoolExecutor
-
-
-
-
-
-
-
 from missingpy import KNNImputer, MissForest
-
-
 import plotly
 import plotly.graph_objs as go
 import cufflinks as cf
-cf.go_offline()
-
-
 import plotly.io as pio
-pio.renderers
-pio.renderers.default = "browser"
-
-
-
-
-    
-directory = '/media/pt/hdd/Auto EDA Results/regression'   
-
-file_path = os.path.join(directory, 'train.csv')
-train = pd.read_csv(file_path, index_col = False)
-target_column = 'SalePrice'
-
-    
-
-
-y_train = train[target_column].copy(deep = True)  
-
- 
-
-
-
-
-
-y = y_train.values
-
-
-global_verify_parallel_execution = False
-global_debug_mode = True
-
-
 from funcy import join
 import pandas as pd
 import numpy as np
@@ -83,36 +32,32 @@ from sklearn.preprocessing import StandardScaler
 import scipy.stats
 import matplotlib.pyplot as plt
 from scipy.stats._continuous_distns import _distn_names
+import warnings
+from ParallelCPU import ParallelCPU
 
 
+cf.go_offline()
+pio.renderers
+pio.renderers.default = "browser"   
+directory = '/media/pt/hdd/Auto EDA Results/regression'  
+result_directory = os.path.join(directory, 'target_distribution_plots')
 
-
-#class AutoFindDist:
-#    def __init__(self):
-#        
-#
-#    def fit(self, y):
-#        
-#        
-#    def get_k_best_transformers(self, y):
-#        
-#        
-#     
-#    
-    
-    
+ 
+file_path = os.path.join(directory, 'train.csv')
+train = pd.read_csv(file_path, index_col = False)
+target_column = 'SalePrice'
+y_train = train[target_column].copy(deep = True)  
+y = y_train.values
+global_verify_parallel_execution = False
+global_debug_mode = True
     
 # Create an index array (x) for data
 x = np.arange(len(y))
 size = len(y)
-
 plt.hist(y)
 plt.show()
-
 y_df = pd.DataFrame(y, columns=['Data'])
 y_df.describe()
-
-
 sc=StandardScaler() 
 yy = y.reshape (-1,1)
 sc.fit(yy)
@@ -122,15 +67,9 @@ y_std
 del yy
 
 
-
-
-
-
 # Set list of distributions to test
 # See https://docs.scipy.org/doc/scipy/reference/stats.html for more
-
 # Turn off code warnings (this is not recommended for routine use)
-import warnings
 warnings.filterwarnings("ignore")
 
 # Set up list of candidate distributions to use
@@ -140,13 +79,9 @@ long_version = [
                     'levy_stable',
                ]
 
-
-
 dist_names = _distn_names
 if 'levy_stable' in dist_names:
     dist_names.remove('levy_stable')
-    
-
 
 dist_names_short = ['beta',
               'expon',
@@ -159,6 +94,7 @@ dist_names_short = ['beta',
               'weibull_min', 
               'weibull_max']
 
+
 # Set up empty lists to stroe results
 chi_square = []
 p_values = []
@@ -166,26 +102,11 @@ p_values = []
 # Set up 50 bins for chi-square test
 # Observed data will be approximately evenly distrubuted aross all bins
 percentile_bins = np.linspace(0,100)
-
-
-
 percentile_cutoffs = np.percentile(y_std, percentile_bins)
 observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
 cum_observed_frequency = np.cumsum(observed_frequency)
-
-
 all_distributions_df = pd.DataFrame(columns = dist_names)
-
-
-
 print('Fitting Distribution to Target')
-
-
-
-
-
-
-
 
 
 # Loop through candidate distributions
@@ -193,14 +114,10 @@ def get_chi_square_and_ks_test(all_distributions_df):
     # Get histogram of original data
     y, x = np.histogram(y_std, bins=bins, density=True)
     x = (x + np.roll(x, -1))[:-1] / 2.0
-
-    results = pd.DataFrame()
-    
+    results = pd.DataFrame()    
     parameters = {}
-
+    
     for idx, distribution in enumerate(all_distributions_df.columns):
-#        print('>>>>' + distribution)
-
         # Set up distribution and get fitted distribution parameters
         dist = getattr(scipy.stats, distribution)
         param = dist.fit(y_std)
@@ -208,7 +125,6 @@ def get_chi_square_and_ks_test(all_distributions_df):
         # Obtain the KS test P statistic, round it to 5 decimal places
         p = scipy.stats.kstest(y_std, distribution, args=param)[1]
         p = np.around(p, 5)
-#        p_values.append(p)    
         
         # Get expected counts in percentile bins
         # This is based on a 'cumulative distrubution function' (cdf)
@@ -223,29 +139,10 @@ def get_chi_square_and_ks_test(all_distributions_df):
         expected_frequency = np.array(expected_frequency) * size
         cum_expected_frequency = np.cumsum(expected_frequency)
         ss = sum (((cum_expected_frequency - cum_observed_frequency) ** 2) / cum_observed_frequency)
-#        chi_square.append(ss)
-            
-        # Collate results and sort by goodness of fit (best at top)
-#        results['Distribution'] = distribution
-#        results['chi_square'] = ss
-#        results['p_value'] = p
-        
-        
-        
         results.loc[distribution, 'Distribution'] = distribution
         results.loc[distribution, 'chi_square'] = ss
         results.loc[distribution, 'p_value'] = p
-        
-        
         parameters[distribution] = param
-
-        
-        
-        
-        
-        #other code
-        # fit dist to data
-#        params = dist.fit(y_std)
 
         # Separate parts of parameters
         arg = param[:-2]
@@ -255,51 +152,21 @@ def get_chi_square_and_ks_test(all_distributions_df):
         # Calculate fitted PDF and error with fit in distribution
         pdf = dist.pdf(x, loc=loc, scale=scale, *arg)
         sse = np.sum(np.power(y - pdf, 2.0))
-
         results.loc[str(distribution), 'sse'] = sse
-        
-        
-        
-#        
-#        #my code
-#        statistic, critical_values, significance_level = scipy.stats.anderson(y_std, dist = dist)        
-#        results.loc[distribution, 'ad_test'] = statistic
-        
-        
-        
-                
-                
         print(distribution)
-
-        
     return results, parameters
-        
-        
 
-
-#results = get_chi_square_and_p_value(all_distributions_df)
-
-from ParallelCPU import ParallelCPU
-#results = parallise(all_distributions_df, function = get_chi_square_and_ks_test)
 
 parallel = ParallelCPU(debug_mode = False)
 results, parameters = parallel.compute(all_distributions_df, function = get_chi_square_and_ks_test)
 
-# Report results
 
+# Report results
 print ('\nDistributions sorted by goodness of fit:')
 print ('----------------------------------------')
 results_new = results
 results.sort_values(['p_value'], ascending = False, inplace=True)
-
 print (results)
-
-
-
-
-#results_original = results
-#results_original.index = results_original['Distribution']
-#results_original = results_original.drop(columns = ['Distribution'])
 
 
 # Divide the observed data into 100 bins for plotting (this can be changed)
@@ -310,7 +177,6 @@ bin_cutoffs = np.linspace(np.percentile(y,0), np.percentile(y,99),number_of_bins
 h = plt.hist(y, bins = bin_cutoffs, color='0.75')
 plt.show()
 
-
 # Get the top three distributions from the previous phase
 number_distributions_to_plot = 10
 top_k_dist_names = results['Distribution'].iloc[0:number_distributions_to_plot]
@@ -318,65 +184,24 @@ top_k_dist_names = results['Distribution'].iloc[0:number_distributions_to_plot]
 # Create an empty list to stroe fitted distribution parameters
 top_k_parameters = []
 
-# Loop through the distributions ot get line fit and paraemters
-
-
-#
-#
-#plt.figure()
-#plt.title('Target - Normal Distribution')
-#sns.distplot(y_train, fit=stats.norm, color = 'r', kde = True, rug = True)
-#
-
-
-
 for idx, dist_name in enumerate(top_k_dist_names):
     # Set up distribution and store distribution paraemters
     dist = getattr(scipy.stats, dist_name)
 #    param = dist.fit(y_std)
     param = parameters[dist_name]
     top_k_parameters.append(param)
-    
-
     plt.figure()
     plt.title('Target - ' + dist_name)
     sns.distplot(y_std, fit=dist, color = 'r', kde = True, rug = False, hist = True)
     plt.show()
-        
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Add legend and display plot
-#
-#plt.legend()
-#plt.show()
 
 # Store distribution paraemters in a dataframe (this could also be saved)
 dist_parameters = pd.DataFrame()
 dist_parameters['Distribution'] = (
         results['Distribution'].iloc[0:number_distributions_to_plot])
 dist_parameters['Distribution parameters'] = top_k_parameters
+
 
 # Print parameter results
 print ('\nDistribution parameters:')
@@ -385,20 +210,12 @@ print ('------------------------')
 for index, row in dist_parameters.iterrows():
     print ('\nDistribution:', row[0])
     print ('Parameters:', row[1] )
-    
-    
-    
-    
-    
 
-
-## qq and pp plots
-    
+## qq and pp plots    
 data = y_std.copy()
 data.sort()
 
 # Loop through selected distributions (as previously selected)
-
 for distribution in top_k_dist_names:
     # Set up distribution
     dist = getattr(scipy.stats, distribution)
@@ -451,39 +268,10 @@ for distribution in top_k_dist_names:
     plt.show()
 
 
-
 k_best_distributions = results.sort_values(by= 'p_value', axis=0, ascending = False).iloc[0:3,]
 k_best_distributions = k_best_distributions.index.values.tolist()
-
-
-
-
 k_best_target_transformers = []
 
-for distribution in k_best_distributions:
-        
+for distribution in k_best_distributions:        
     dist = getattr(scipy.stats, distribution)
-
-    
-    
     k_best_target_transformers.append(dist)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

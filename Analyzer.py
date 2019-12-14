@@ -882,11 +882,13 @@ if __name__ == '__main__':
 
 
     ExtraTreesRegressor_params =    {
-                                        'max_depth': get_equally_spaced_numbers_in_range(5,35,10) , 
-                                        'n_estimators': get_equally_spaced_numbers_in_range(1,60,10),
+#                                        'max_depth': get_equally_spaced_numbers_in_range(5,35,10) , 
+#                                        'n_estimators': get_equally_spaced_numbers_in_range(1,60,10),
 
 #                                        'max_depth': get_equally_spaced_numbers_in_range(10,14,2) ,
 #                                        'n_estimators': get_equally_spaced_numbers_in_range(2,4,2),
+                                        'max_depth': get_equally_spaced_numbers_in_range(1,2000,10) ,
+                                        'n_estimators': get_equally_spaced_numbers_in_range(1,100,10),
                                         'random_state' : [global_random_seed]
 #                                        'max_depth': [1] , 
 #                                        'n_estimators': [1], 
@@ -901,9 +903,11 @@ if __name__ == '__main__':
     
     
     bayesianRidge_params =          {
-                                        'n_iter' : get_equally_spaced_numbers_in_range(1950,4000,10)
+#                                        'n_iter' : get_equally_spaced_numbers_in_range(1950,4000,10)
 #                                        'n_iter' : [2,4]
 #                                        'n_iter' : [2]
+                                        'n_iter' : get_equally_spaced_numbers_in_range(1,2000,10)
+
                                     }
     
     
@@ -1025,9 +1029,11 @@ if __name__ == '__main__':
 #                                                           XGBRegressor(),\
 #                                                           AdaBoostRegressor(), \
 #                                                           KNeighborsRegressor()],
-                                           'regressor' : [ {Ridge() : {'alpha' :  [14.5, 14.6, 14.7, 14.8, 14.9, 15, 15.1, 15.2, 15.3, 15.4, 15.5]  } } ,
-                                                           {Lasso()  : {'max_iter':[1e7], 'alpha' :  [5e-05, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007, 0.0008]  } } ,
-                                                           {ElasticNet()  : {'max_iter':[1e7], 'alpha' :  [0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007], 'l1_ratio': [0.8, 0.85, 0.9, 0.95, 0.99, 1] } } ,
+                                           'regressor' : [ 
+                                                   
+#                                                           {Ridge() : {'alpha' :  [14.5, 14.6, 14.7, 14.8, 14.9, 15, 15.1, 15.2, 15.3, 15.4, 15.5]  } } ,
+#                                                           {Lasso()  : {'max_iter':[1e7], 'alpha' :  [5e-05, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007, 0.0008]  } } ,
+#                                                           {ElasticNet()  : {'max_iter':[1e7], 'alpha' :  [0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007], 'l1_ratio': [0.8, 0.85, 0.9, 0.95, 0.99, 1] } } ,
 
                                                             XGBRegressor(), 
                                                             AdaBoostRegressor(), 
